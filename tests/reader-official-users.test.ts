@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import test from 'node:test';
+import { test } from 'vitest';
 
 // Needs the Harness source tree and a local pinned Chromium; CI (which builds the
 // release) has neither browser runtime, so the test skips there instead of failing.

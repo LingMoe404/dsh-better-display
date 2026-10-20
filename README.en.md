@@ -45,10 +45,16 @@ dsh plugin --profile web remove dsh-better-display
 
 ## Develop
 
+From a clean clone:
+
 ```sh
+npm ci
+npm run build
 npm test
 npm run typecheck
 ```
+
+The harness compat check inside `npm run build` needs ripgrep and a Harness checkout. Optional environment variables are listed in `.env.example` and [AGENTS.md](AGENTS.md). The interactive reading-view path, a blank reader, a missing stylesheet, and a stuck fold are in [docs/runbooks/blank-reader.md](docs/runbooks/blank-reader.md).
 
 ## License
 

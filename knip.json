@@ -1,0 +1,33 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/dsh-better-display.ts",
+    "src/client/index.tsx",
+    "tests/**/*.ts",
+    "scripts/**/*.mjs",
+    "tools/**/*.js"
+  ],
+  "project": ["src/**/*.{ts,tsx}", "!src/client/markdown/**", "!src/client/native/**"],
+  "ignore": ["lib/**", "src/client/markdown/**", "src/client/native/**"],
+  "ignoreExportsUsedInFile": true,
+  "ignoreIssues": {
+    "src/client/McpAppFrame.tsx": ["exports"],
+    "src/client/mcp-app.ts": ["exports"],
+    "src/client/projection.ts": ["exports"],
+    "src/client/official-slots.tsx": ["types"]
+  },
+  "ignoreBinaries": ["rg"],
+  "ignoreDependencies": [
+    "clsx",
+    "katex",
+    "lightningcss",
+    "mdast-util-math",
+    "micromark-core-commonmark",
+    "micromark-extension-gfm",
+    "micromark-factory-space",
+    "micromark-util-character",
+    "micromark-util-classify-character",
+    "micromark-util-sanitize-uri",
+    "micromark-util-symbol"
+  ]
+}

@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { collapseRows, containsNewUser, flowRows, FOLD_TIMING, retiringKeys } from '../src/client/fold-choreography.js';
 import { presentLiveTurn } from '../src/client/live-turn.js';

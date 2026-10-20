@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import type { TurnLocation } from '@deepseek-ai/dsh-client-ui-conversation/client';
 import { basename, createProducedFileMentions, dirname, getTurnDeliverables, showDeliverablesRow } from '../src/client/deliverables.ts';

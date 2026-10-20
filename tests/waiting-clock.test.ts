@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { HANDOVER_KINDS, handsBackToModel, WAIT_AFTER, waitingAnchor } from '../src/client/waiting-clock.js';
 

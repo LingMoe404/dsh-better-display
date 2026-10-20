@@ -1,0 +1,16 @@
+{
+  "minLines": 8,
+  "minTokens": 50,
+  "maxLines": 2000,
+  "threshold": 0.5,
+  "reporters": ["console"],
+  "format": ["typescript", "tsx", "javascript", "css"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/lib/**",
+    "**/src/client/markdown/**",
+    "**/src/client/native/**",
+    "**/.git/**"
+  ],
+  "gitignore": true
+}

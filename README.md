@@ -45,10 +45,16 @@ dsh plugin --profile web remove dsh-better-display
 
 ## 开发
 
+干净检出后：
+
 ```sh
+npm ci
+npm run build
 npm test
 npm run typecheck
 ```
+
+`npm run build` 里的 Harness 兼容检查需要 ripgrep 和一份 Harness 检出。可选环境变量写在 `.env.example` 和 [AGENTS.md](AGENTS.md)。阅读页怎么点开、空白页、样式丢失和折叠停住见 [docs/runbooks/blank-reader.md](docs/runbooks/blank-reader.md)。
 
 ## 许可
 

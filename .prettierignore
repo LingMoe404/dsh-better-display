@@ -1,0 +1,10 @@
+node_modules
+lib
+artifacts
+.evidence
+.delivery
+coverage
+report
+dist
+*.tgz
+package-lock.json

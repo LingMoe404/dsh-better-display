@@ -5,6 +5,15 @@ artifacts/
 .dsh*/
 .env
 .env.*
+!.env.example
 *.log
 *.tgz
 .DS_Store
+.idea/
+.vscode/
+build/
+dist/
+coverage/
+target/
+.gradle/
+*.class

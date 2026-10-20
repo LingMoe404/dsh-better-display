@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vitest';
 import { toolUpdateRows } from '../src/client/native/tool-update.js';
 
 test('a single tool addition is its own closed row', () => {

@@ -1,0 +1,12 @@
+{
+  "name": "dsh-better-display",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:24-bookworm",
+  "postCreateCommand": "npm ci",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.vscode-typescript-next"
+      ]
+    }
+  }
+}

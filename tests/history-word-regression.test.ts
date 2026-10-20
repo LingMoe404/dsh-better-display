@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vitest';
 import { WordTimeline } from '../src/client/word-timeline.js';
 
 test('opening a long existing answer does not animate every historical word', () => {

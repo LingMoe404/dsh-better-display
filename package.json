@@ -38,9 +38,21 @@
     "test:official": "node scripts/verify-official-bridge.mjs",
     "test:auto-fold": "node scripts/verify-auto-fold.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx/esm --test tests/*.test.ts",
+    "test": "vitest run",
     "link:harness": "node scripts/link-harness-dependencies.mjs",
-    "test:flowcell": "node scripts/verify-flowcell.mjs"
+    "test:flowcell": "node scripts/verify-flowcell.mjs",
+    "lint": "eslint src --max-warnings 0",
+    "format:check": "prettier --check .",
+    "deadcode": "knip",
+    "duplicates": "jscpd src",
+    "debt": "node scripts/check-todo-debt.mjs",
+    "changelog": "node scripts/changelog.mjs",
+    "check:agents": "node scripts/check-agents-md.mjs",
+    "check:bundle": "node scripts/check-bundle-size.mjs",
+    "security:audit": "node scripts/security-audit-report.mjs",
+    "check:flags": "node scripts/check-dead-flags.mjs",
+    "test:list": "vitest list",
+    "test:coverage": "vitest run --coverage"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.4",
@@ -70,7 +82,17 @@
     "tsdown": "^0.22.2",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
-    "semver": "^7.7.2"
+    "semver": "^7.7.2",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
+    "typescript-eslint": "^8.72.0",
+    "prettier": "^3.9.10",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "knip": "^6.42.1",
+    "jscpd": "^5.4.1",
+    "@vitest/coverage-v8": "5.0.5",
+    "vitest": "5.0.5"
   },
   "dependencies": {
     "clsx": "^2.0.0",
@@ -128,5 +150,14 @@
     "reasoning",
     "streaming",
     "accessibility"
-  ]
+  ],
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{mjs,cjs,js,json,md,yml,yaml,css}": [
+      "prettier --write"
+    ]
+  }
 }

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vitest';
 import { ReaderEntryPolicy, readerEntryRequested } from '../src/client/entry-policy.js';
 
 test('fresh sessions default to reading, without requiring a special URL', () => {

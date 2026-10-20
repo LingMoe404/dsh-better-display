@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vitest';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { IncomingMessage, ServerResponse } from 'node:http';
 import { Socket } from 'node:net';
@@ -23,9 +23,9 @@ test('absolute parent predicate accepts POSIX, drive and UNC roots only', () => 
   assert.equal(isAbsoluteWorkspacePath(dirname('docs/a.txt')), false);
 });
 
-async function workspace(t: { after: (cleanup: () => Promise<void>) => void }) {
+async function workspace(t: { onTestFinished: (cleanup: () => Promise<void>) => void }) {
   const root = await mkdtemp(join(tmpdir(), 'bd-reveal-'));
-  t.after(() => rm(root, { recursive: true, force: true }));
+  t.onTestFinished(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, 'docs'));
   await writeFile(join(root, 'docs', 'report.md'), 'report');
   return root;

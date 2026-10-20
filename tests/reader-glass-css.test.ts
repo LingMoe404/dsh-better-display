@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vitest';
 import { externalClientBundle } from '../tools/client-build.js';
 
 // Exercise the actual build plugin so options cannot drift from production.

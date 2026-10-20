@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vitest';
 import { StreamBuffer, STREAM_TIMING } from '../src/client/stream-buffer.js';
 
 test('a transport burst becomes multiple bounded, monotonically growing frames', () => {

@@ -1,0 +1,13 @@
+#!/bin/sh
+cd "$(dirname "$0")/.." || exit 1
+exec node --input-type=module <<'EOF'
+import lintStaged from 'lint-staged';
+
+const ok = await lintStaged({
+  config: {
+    '*.{ts,tsx}': ['eslint --fix', 'prettier --write'],
+    '*.{mjs,cjs,js,json,md,yml,yaml,css}': ['prettier --write'],
+  },
+});
+if (!ok) process.exit(1);
+EOF

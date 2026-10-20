@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vitest';
 import type { Nodes } from 'mdast';
 import { WORD_MOTION, WordTimeline } from '../src/client/word-timeline.js';
 import { IncrementalMarkdownParser } from '../src/client/markdown/incremental.js';

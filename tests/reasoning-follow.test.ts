@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vitest';
 import { reasoningTarget } from '../src/client/reasoning-follow.js';
 
 test('reasoning follows ordinary growth in two-line steps without passing the tail', () => {

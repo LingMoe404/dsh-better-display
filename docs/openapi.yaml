@@ -1,0 +1,147 @@
+openapi: 3.0.3
+info:
+  title: dsh-better-display
+  version: 0.3.8
+  description: >
+    Exact routes registered by apply() in src/dsh-better-display.ts.
+    POST /better-display/reveal is createRevealHandler in src/reveal.ts.
+    GET /better-display/skill-status returns toPublicSkillStatus.
+    The host webServer mounts these paths. The handlers do not read an
+    Authorization header or any other credential.
+servers:
+  - url: /
+    description: DeepSeek Harness host after this plugin has loaded.
+paths:
+  /better-display/reveal:
+    post:
+      operationId: revealInFileManager
+      summary: Reveal a workspace file in the OS file manager
+      description: >
+        Any method other than POST returns 405 with an empty body and no
+        Content-Type. The JSON body is read to completion, then parsed.
+        An absolute path is used as-is and does not call the workspace root
+        lookup. A relative path must resolve to exactly one existing file
+        under the session cwd or the matching workspace registry roots.
+        Drive-relative and root-relative Windows paths are rejected.
+        On success the host spawns open -R, explorer.exe /select, or xdg-open.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path:
+                  type: string
+                  description: Trimmed. Empty or whitespace-only is 400.
+                sessionId:
+                  type: string
+                  description: Optional. Used only when path is not absolute.
+            examples:
+              relative:
+                value:
+                  path: docs/report.md
+                  sessionId: target
+      responses:
+        '200':
+          description: The file manager was spawned. Body is JSON.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                additionalProperties: false
+                properties:
+                  ok:
+                    type: boolean
+                    enum: [true]
+        '400':
+          description: >
+            JSON.parse failed, path was empty, the path was not
+            workspace-relative, no root contained the file, or more than one
+            root contained it. error is String(err), so it includes the
+            Error prefix.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '405':
+          description: req.method was not POST. Empty body. Content-Type is not set.
+  /better-display/skill-status:
+    get:
+      operationId: getGenerativeMcpappsSkillStatus
+      summary: Public generative-mcpapps install status
+      description: >
+        Any method other than GET returns 405 with an empty body and no
+        Content-Type. The optional cwd query selects which project roots are
+        scanned. The JSON body is toPublicSkillStatus, which always replaces
+        roots with the two conventional relative paths and drops packPath
+        and any host home absolute path.
+      parameters:
+        - in: query
+          name: cwd
+          required: false
+          schema:
+            type: string
+          description: Project directory passed to scanGenerativeMcpappsStatus. Omitted when the settings probe has no session cwd.
+      responses:
+        '200':
+          description: Public skill status. This body has no ok field.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicSkillStatus'
+        '405':
+          description: req.method was not GET. Empty body. Content-Type is not set.
+        '500':
+          description: scanGenerativeMcpappsStatus threw. error is String(err).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+components:
+  schemas:
+    ErrorBody:
+      type: object
+      required: [ok, error]
+      additionalProperties: false
+      properties:
+        ok:
+          type: boolean
+          enum: [false]
+        error:
+          type: string
+    PublicSkillRoot:
+      type: object
+      required: [source, path]
+      additionalProperties: false
+      properties:
+        source:
+          type: string
+          enum: [conventional]
+        path:
+          type: string
+          enum: ['.dsh/skills', '.agents/skills']
+    PublicSkillStatus:
+      type: object
+      required: [name, installed, via, roots]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          enum: [generative-mcpapps]
+        installed:
+          type: boolean
+        via:
+          type: string
+          nullable: true
+          enum: ['skills.list', 'skill-root', null]
+          description: skills.list when the host skills registry lists the skill, skill-root when a scanned root has it, otherwise null.
+        roots:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/PublicSkillRoot'
+          description: Always .dsh/skills then .agents/skills, source conventional. Not the scanned absolute roots.

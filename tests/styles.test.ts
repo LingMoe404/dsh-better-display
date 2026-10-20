@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { ensureStyles } from '../src/client/styles.js';
 
@@ -9,7 +9,7 @@ test('ensureStyles tolerates module evaluation without a document', () => {
 
 test('ensureStyles restores removed plugin CSS and remains idempotent', t => {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
-  t.after(() => {
+  t.onTestFinished(() => {
     if (descriptor) Object.defineProperty(globalThis, 'document', descriptor);
     else Reflect.deleteProperty(globalThis, 'document');
   });

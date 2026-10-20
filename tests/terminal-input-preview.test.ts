@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import type { PreparingToolCall, RunningToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-conversation/client';
 import { activityPhase, activitySummary } from '../src/client/tool-activity.ts';

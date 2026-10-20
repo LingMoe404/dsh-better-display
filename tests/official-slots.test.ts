@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { memo } from 'react';
 import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots';
 import { mirrorOfficialSlot, readerTailMatch, type CompositionRegistry } from '../src/client/official-slots.js';
