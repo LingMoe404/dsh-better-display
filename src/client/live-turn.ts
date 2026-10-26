@@ -39,17 +39,6 @@ export function foldSummary(steps: readonly LiveStep[]): string {
   return parts.join(' · ') || '此前步骤';
 }
 
-/** One chain: fold only when a new reasoning step has prior body/tool/reasoning. */
-export function splitChain(chain: readonly LiveStep[]): { fold: readonly LiveStep[] | null; open: readonly LiveStep[] } {
-  const lastReasoning = chain.findLastIndex(step => step.kind === 'reasoning');
-  if (lastReasoning < 0) return { fold: null, open: chain };
-  const prior = chain.slice(0, lastReasoning);
-  if (!prior.length) return { fold: null, open: chain };
-  const trigger = prior.some(step => step.kind === 'reasoning' || step.kind === 'body' || step.kind === 'tool');
-  if (!trigger) return { fold: null, open: chain };
-  return { fold: prior, open: chain.slice(lastReasoning) };
-}
-
 function skipReasoning(part: { kind: string; blocks: AssistantBlock[] }): boolean {
   return part.kind === 'reasoning' && !part.blocks.some(block => block.kind === 'reasoning' && block.text.trim() !== '');
 }
@@ -124,32 +113,117 @@ export function segmentLiveTurn(
   return steps;
 }
 
+/** Only a run that contains real thinking/tool work is worth folding. */
+function foldableRun(run: readonly LiveStep[]): boolean {
+  return run.some(step => step.kind === 'reasoning' || step.kind === 'tool');
+}
+
+/**
+ * One live chain: narration stays visible, while every earlier reasoning/tool
+ * run collapses into its own box at its original position.
+ */
 export function presentLiveTurn(steps: readonly LiveStep[], boundary: TurnBoundary, autoFold = true): LiveTurnItem[] {
   const live = autoFold && liveFoldEnabled(boundary);
   const items: LiveTurnItem[] = [];
-  let chain: LiveStep[] = [];
-  const flush = () => {
-    if (!chain.length) return;
-    if (!live) {
-      for (const step of chain) items.push({ kind: 'open', key: step.key, step });
-      chain = [];
-      return;
+  const open = (step: LiveStep) => items.push({ kind: 'open', key: step.key, step });
+  const fold = (run: readonly LiveStep[]) => {
+    if (!run.length) return;
+    if (live && foldableRun(run)) {
+      items.push({ kind: 'fold', key: `live-fold:${run[0]!.key}`, steps: run, summary: foldSummary(run) });
+    } else {
+      for (const step of run) open(step);
     }
-    const { fold, open } = splitChain(chain);
-    if (fold?.length) {
-      items.push({ kind: 'fold', key: `live-fold:${chain[0]!.key}`, steps: fold, summary: foldSummary(fold) });
-    }
-    for (const step of open) items.push({ kind: 'open', key: step.key, step });
-    chain = [];
   };
+  let run: LiveStep[] = [];
+  const flush = () => { fold(run); run = []; };
+
+  // A user insert resets the chain: steps before it are never folded by
+  // reasoning after it. Split into user-delimited segments and walk each one.
+  const segments: LiveStep[][] = [];
+  let segment: LiveStep[] = [];
   for (const step of steps) {
     if (step.kind === 'user') {
-      flush();
-      items.push({ kind: 'user', key: step.key, step });
+      segments.push(segment); segments.push([step]); segment = [];
     } else {
-      chain.push(step);
+      segment.push(step);
     }
   }
-  flush();
+  segments.push(segment);
+
+  for (const part of segments) {
+    if (!part.length) continue;
+    const first = part[0]!;
+    if (part.length === 1 && first.kind === 'user') {
+      items.push({ kind: 'user', key: first.key, step: first });
+      continue;
+    }
+    if (!live) {
+      for (const step of part) open(step);
+      continue;
+    }
+    // Narration is never folded. Once a later reasoning step exists, every
+    // reasoning/tool run before it folds at its own position, so the latest
+    // thinking and everything after it stay open while earlier steps collapse —
+    // even across narration blocks, which the reader still renders in place.
+    const lastReasoning = part.findLastIndex(step => step.kind === 'reasoning');
+    if (lastReasoning <= 0) {
+      for (const step of part) open(step);
+      continue;
+    }
+    for (let index = 0; index < part.length; index++) {
+      const step = part[index]!;
+      if (index < lastReasoning) {
+        if (step.kind === 'body') { flush(); open(step); }
+        else run.push(step);
+      } else {
+        if (index === lastReasoning) flush();
+        open(step);
+      }
+    }
+    flush();
+  }
   return items;
+}
+
+/**
+ * Summaries for collapsed process that sits between two narration blocks.
+ *
+ * A live-fold cell already shows that summary while the turn is open. Drawing
+ * the seam as well repeats the same counts, so a run whose every step is
+ * already inside a fold cell contributes neither a seam nor `after`. `after`
+ * is what marks the previous body with `data-reader-seam-after` and drops its
+ * bottom padding; skipping the seam must leave that spacing alone.
+ */
+export function planProcessSeams(
+  steps: readonly LiveStep[],
+  liveItems: readonly LiveTurnItem[],
+  expanded: boolean,
+): { before: Map<string, string>; after: Set<string> } {
+  const before = new Map<string, string>();
+  const after = new Set<string>();
+  if (expanded) return { before, after };
+  const liveFolded = new Set(
+    liveItems.flatMap(item => item.kind === 'fold' ? item.steps.map(step => step.key) : []),
+  );
+  let previousBody: Extract<LiveStep, { kind: 'body' }> | undefined;
+  let process: LiveStep[] = [];
+  for (const step of steps) {
+    if (step.kind === 'body') {
+      const folded = process.filter(item => item.kind !== 'user');
+      const coveredByLiveFold = folded.length > 0 && folded.every(item => liveFolded.has(item.key));
+      if (!coveredByLiveFold && previousBody
+        && folded.some(item => item.kind === 'reasoning' || item.kind === 'tool' || item.kind === 'other')) {
+        before.set(step.key, foldSummary(folded));
+        after.add(previousBody.key);
+      }
+      previousBody = step;
+      process = [];
+    } else if (step.kind === 'user') {
+      previousBody = undefined;
+      process = [];
+    } else {
+      process.push(step);
+    }
+  }
+  return { before, after };
 }

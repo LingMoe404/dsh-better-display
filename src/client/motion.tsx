@@ -16,7 +16,7 @@ export function useMotionAllowed(enabled: boolean): boolean {
   return enabled && !reduced;
 }
 
-export function usePinnedSelection(root: RefObject<HTMLElement>, selector = '[data-reader-answer], [data-reader-process]'): readonly string[] {
+export function usePinnedSelection(root: RefObject<HTMLElement>, selector = '[data-reader-answer], [data-reader-body], [data-reader-process]'): readonly string[] {
   const [keys, setKeys] = useState<readonly string[]>([]);
   useEffect(() => {
     const update = () => {
@@ -89,7 +89,7 @@ export function StatusText({ text, motion, shimmer = false }: { text: string; mo
 
 export function Disclosure({ open, onChange, label, controls, buttonRef, ariaLabel }: {
   open: boolean; onChange: (value: boolean) => void; label: ReactNode;
-  controls?: string; buttonRef: RefObject<HTMLButtonElement>;
+  controls?: string; buttonRef?: RefObject<HTMLButtonElement>;
   ariaLabel?: string;
 }) {
   const name = ariaLabel ?? '思考与过程';

@@ -11,7 +11,7 @@ import { ToolActivity, ToolMedia } from './ToolActivity.js';
 import { OfficialActions, OfficialNode, OfficialTail } from './OfficialContent.js';
 import { OFFICIAL_SEATS } from './official-slots.js';
 import { preparingLabel, readerFlow } from './tool-activity.js';
-import { Disclosure, ProcessFragment, RetiringContent, StatusText, useMotionAllowed, usePinnedSelection, useReadingScroll } from './motion.js';
+import { Disclosure, ProcessFragment, StatusText, useMotionAllowed, usePinnedSelection, useReadingScroll } from './motion.js';
 import { StreamMotionContext } from './streaming.js';
 import { assistantSegments, boundaryOf, forkAnchorSeq, groupNodes, hasProcessContent, hasVisibleBody, isEarlierNarration, processChoiceKey, processExpanded, terminalLabel } from './projection.js';
 import { basename, createProducedFileMentions, dirname, getTurnDeliverables, showDeliverablesRow } from './deliverables.js';
@@ -23,7 +23,8 @@ import { ContextInjectionRow } from './native/ContextInjectionRow.js';
 import { TimelineRail } from './TimelineRail.js';
 import { landTurn, scrollerOf } from './conversation-scroll.js';
 import { mergeTimelineItems, type TimelineItem } from './timeline.js';
-import { presentLiveTurn, segmentLiveTurn } from './live-turn.js';
+import { FoldSummaryText } from './LiveFold.js';
+import { planProcessSeams, presentLiveTurn, segmentLiveTurn } from './live-turn.js';
 import type { LiveStep } from './live-turn.js';
 import { frostedGlassOf } from './fold-intensity.js';
 import { ChoreographedFlow, useFlowChat } from './ChoreographedFlow.js';
@@ -166,8 +167,9 @@ const ProcessNode = memo(function ProcessNode({ useChat, t, nodeKey, open, motio
   return content && <ProcessFragment open={open} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey} framed>{content}</ProcessFragment>;
 });
 
-const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, processOpen = false, pinned = false, folded = false, partStart, motion, onRead, returnFocusTo, ...render }: SeatProps & {
+const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, processOpen = false, pinned = false, folded = false, partStart, seamSummary, seamAfter = false, motion, onRead, returnFocusTo, ...render }: SeatProps & {
   motion: boolean; onRead: () => void; returnFocusTo: RefObject<HTMLButtonElement>; partStart?: number; folded?: boolean;
+  seamSummary?: string; seamAfter?: boolean;
 }) {
   const node = useChat(snapshot => snapshot.nodes.get(nodeKey));
   if (!node || node.visibility === 'hidden' || !isNode(node, 'assistant-step')) return null;
@@ -181,23 +183,26 @@ const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, 
   return <>{visible.map(part => {
     const index = parts.findIndex(item => item.start === part.start);
     const last = index === parts.length - 1;
-    return part.kind === 'reasoning'
-    ? <ProcessFragment key={part.start} open={processOpen} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey} framed>
+    if (part.kind === 'reasoning') return <ProcessFragment key={part.start} open={processOpen} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey} framed>
       <ReasoningCard step={data.step} active={processOpen && boundary.status === 'open' && data.step === boundary.latestStep} motion={motion} selected={pinned} onRead={onRead}>
         <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running' && last && data.blocks.at(-1)?.kind === 'reasoning'}
           holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
       </ReasoningCard>
-    </ProcessFragment>
-    : isProcessStep ? <ProcessFragment key={part.start} open={processOpen} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey}>
-      <article className={css.processCommentary}>
+    </ProcessFragment>;
+    if (!hasVisibleBody(part.blocks)) return null;
+    // Narration stays body prose and never enters a disclosure. The seam in
+    // the gap summarises folded process between two body blocks.
+    const isFinalAnswer = !isProcessStep;
+    return <Fragment key={part.start}>
+      {seamSummary && <div className={css.processSeamRow} data-reader-process-seam data-reader-process-seam-summary={seamSummary}>
+        <Disclosure open={false} onChange={() => onRead()} ariaLabel="被折叠的过程"
+          label={<FoldSummaryText summary={seamSummary} motion={false} />} />
+      </div>}
+      <article className={css.answer} data-reader-body data-reader-anchor data-reader-key={nodeKey} data-reader-source-start={part.start}
+        data-reader-seam-after={seamAfter || undefined} data-answer-status={data.status} data-answer-phase={isFinalAnswer ? 'body' : 'process'}>
         <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running'} holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
-      </article>
-    </ProcessFragment>
-    : hasVisibleBody(part.blocks) && <RetiringContent key={part.start} visible={pinned || processOpen || (!earlier && !folded)}>
-      <article className={css.answer} data-reader-answer data-reader-anchor data-reader-key={nodeKey} data-reader-source-start={part.start} data-answer-status={data.status} data-answer-phase={earlier || folded ? 'process' : 'body'}>
-        <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running'} holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
-        {last && data.status === 'interrupted' && <span className={css.stopped}>已停止</span>}
-        {last && !earlier && !folded && data.status !== 'running' && boundary.status === 'closed' && (
+        {isFinalAnswer && last && data.status === 'interrupted' && <span className={css.stopped}>已停止</span>}
+        {isFinalAnswer && last && data.status !== 'running' && boundary.status === 'closed' && (
           <CopyAnswer blocks={body} onFork={(() => {
             // The fork anchor must be the durable closing message seq (same as
             // the official turn-tail branch). AssistantChatData carries no seq
@@ -207,7 +212,7 @@ const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, 
           })()} metrics={render.metrics} extraActions={<OfficialActions official={render.official} messageId={data.finalNode?.messageId} />} />
         )}
       </article>
-    </RetiringContent>;
+    </Fragment>;
   })}</>;
 });
 
@@ -553,6 +558,12 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys,
       ? item.key === key || item.steps.some(step => step.key === key || ('nodeKey' in step && step.nodeKey === key))
       : item.key === key || ('nodeKey' in item.step && item.step.nodeKey === key)));
   const expanded = !autoFold || holdingSelection || processExpanded(expansionChoice, boundary);
+  // Seam between narration blocks. Skip a run a live-fold cell already
+  // covers, and do not drop the previous body's bottom spacing.
+  const seamPlan = useMemo(
+    () => planProcessSeams(steps, liveItems, expanded),
+    [steps, liveItems, expanded],
+  );
   const [foldOpenByKey, setFoldOpenByKey] = useState<Record<string, boolean>>({});
   useLayoutEffect(() => {
     // Restoring automatic folding also releases live "prior steps" disclosures.
@@ -626,7 +637,9 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys,
   const renderStep = (step: LiveStep, folded: boolean) => {
     const processOpen = folded || expanded;
     if (step.kind === 'reasoning' || step.kind === 'body') return <BlockBoundary>
-      <AssistantNode {...shared} boundary={boundary} nodeKey={step.nodeKey} partStart={step.start} pinned={pinnedKeys.includes(step.nodeKey)} processOpen={processOpen} folded={folded} motion={motion} onRead={pinProcess} returnFocusTo={processButton} />
+      <AssistantNode {...shared} boundary={boundary} nodeKey={step.nodeKey} partStart={step.start} pinned={pinnedKeys.includes(step.nodeKey)} processOpen={processOpen} folded={folded} motion={motion} onRead={pinProcess} returnFocusTo={processButton}
+        seamSummary={step.kind === 'body' ? seamPlan.before.get(step.key) : undefined}
+        seamAfter={step.kind === 'body' && seamPlan.after.has(step.key)} />
     </BlockBoundary>;
     if (step.kind === 'tool') return <BlockBoundary><ProcessFragment open={processOpen} motion={motion} onRead={pinProcess} returnFocusTo={processButton} nodeKey={step.key} framed>
       <ToolActivity {...shared} entry={step.entry} motion={motion} turnClosed={boundary.status === 'closed'} onRead={pinProcess} />
@@ -647,14 +660,7 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys,
             label={<GroupStatus group={group} useChat={props.useChat} pending={interaction} motion={motion} />} />
         </StickyLane>}
         {showClosedSummary && <ClosedProcessSummary open={expanded} onChange={setExpanded} controls={flowId}
-          steps={steps.filter(step => {
-            if (step.kind === 'user') return false;
-            if (step.kind !== 'body') return true;
-            const node = nodes.get(step.nodeKey);
-            return !!node && isNode(node, 'assistant-step') && (isEarlierNarration(node.data, boundary)
-              || node.data.blocks.some(block => block.kind === 'tool-call')
-              || (boundary.latestStep > 0 && node.data.step < boundary.latestStep));
-          })} />}
+          steps={steps.filter(step => step.kind !== 'user' && step.kind !== 'body')} />}
       </div>}
       <ChoreographedFlow id={flowId} frame={presentation} motion={motion} enabled={autoFold && boundary.status === 'open' && !holdingSelection}
         urgent={hasTurnError || interaction !== undefined || !sessionRunning} open={foldOpenByKey} processOpen={expanded}
