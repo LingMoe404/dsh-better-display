@@ -6,7 +6,7 @@ import { DiffBlock, DisclosureRow, JsonTree, ReadBlock, SearchBlock, TerminalBlo
 import { Blocks, contentBlocks } from './Blocks.js';
 import { OfficialTool } from './OfficialContent.js';
 import { ProcessFragment } from './motion.js';
-import { activityPhase, activitySummary, callDiffHunks, diffTotals, executionFacts, forgetCallClock, objectValue, runningClockBase, toolIdentity } from './tool-activity.js';
+import { activityPhase, activitySummary, callDiffHunks, diffTotals, executionFacts, forgetCallClock, objectValue, runningClockBase } from './tool-activity.js';
 import type { ToolActivityEntry, ToolCategory, ToolPhase } from './tool-activity.js';
 import type { BlockRenderProps } from './types.js';
 import { classifyTool, toolRowModel, VARIANT_TITLES } from './native/tool-call-model.js';

@@ -57,10 +57,6 @@ function inboxText(item: { content?: readonly unknown[] }): string {
   }).map(block => block.text).join('');
 }
 
-function inboxAttachmentCount(item: { content?: readonly unknown[] }): number {
-  return (item.content ?? []).filter(block => typeof block === 'object' && block !== null && (block as { type?: unknown }).type !== 'text').length;
-}
-
 function cleanErrorMessage(raw: string | undefined): string {
   if (!raw) return '模型服务暂时无响应或连接中断，请稍后重试。';
   let str = raw.trim();
@@ -215,7 +211,7 @@ const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, 
   })}</>;
 });
 
-const MainNode = memo(function MainNode({ useChat, nodeKey, boundary, pinned, processOpen = false, ...render }: SeatProps) {
+const MainNode = memo(function MainNode({ useChat, nodeKey, boundary, pinned, processOpen: _processOpen = false, ...render }: SeatProps) {
   const node = useChat(snapshot => snapshot.nodes.get(nodeKey));
   const [disclosureReset] = useState(() => createSnapshotStore(0));
   if (!node || node.visibility === 'hidden') return null;
@@ -322,7 +318,7 @@ function subagentCount(snapshot: { nodes: { get(key: string): ChatConversationVi
   return 0;
 }
 
-function GroupStatus({ group, sessionId, useChat, pending, motion }: Pick<ReaderProps, 'sessionId' | 'useChat'> & { group: ReaderGroup; motion: boolean; pending: { kind?: string } | undefined }) {
+function GroupStatus({ group, useChat, pending, motion }: Pick<ReaderProps, 'useChat'> & { group: ReaderGroup; motion: boolean; pending: { kind?: string } | undefined }) {
   const text = useChat(snapshot => {
     const turn = group.turn === null ? undefined : snapshot.timeline.turns.get(group.turn);
     if (turn?.status === 'closed') {
@@ -648,7 +644,7 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys,
       {(showStatusLane || showClosedSummary) && <div className={css.turnStickyLanes}>
         {showStatusLane && <StickyLane kind="status" className={css.turnProcessSticky}>
           <Disclosure open={expanded} onChange={setExpanded} controls={flowId} buttonRef={processButton}
-            label={<GroupStatus group={group} sessionId={props.sessionId} useChat={props.useChat} pending={interaction} motion={motion} />} />
+            label={<GroupStatus group={group} useChat={props.useChat} pending={interaction} motion={motion} />} />
         </StickyLane>}
         {showClosedSummary && <ClosedProcessSummary open={expanded} onChange={setExpanded} controls={flowId}
           steps={steps.filter(step => {
@@ -666,7 +662,7 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys,
     </div>
     {/* 状态指示永远排在流程之后：AI 的响应永远出现在最新消息（含补充消息）的下方 */}
     {!hasProcess && boundary.status === 'open' && !isAwaitingModel && <div className={css.disclosure} data-reader-status-only>
-      <GroupStatus group={group} sessionId={props.sessionId} useChat={props.useChat} pending={interaction} motion={motion} />
+      <GroupStatus group={group} useChat={props.useChat} pending={interaction} motion={motion} />
     </div>}
     {showDeliverablesRow(boundary.status, deliverables) && <DeliverablesRow deliverables={deliverables} openFile={props.openFile} revealFile={props.revealFile} openMode={openMode} />}
     {boundary.status === 'closed' && <BlockBoundary><OfficialTail official={official} owner={tailOwner} produced={deliverables} /></BlockBoundary>}
