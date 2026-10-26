@@ -227,3 +227,46 @@ test('an extending display string keeps the motion revision', () => {
   assert.equal(second.transformRevision, 1);
   assert.equal(same, second);
 });
+
+test('a throwing transformer falls back to the original text and recovers without a remount', () => {
+  const registry = createTextTransformRegistry();
+  let broken = true;
+  let notify = () => {};
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    registry.register('reasoning', {
+      subscribe(listener) { notify = listener; return () => {}; },
+      read(request) {
+        if (broken) throw new Error('engine down');
+        return { text: request.text.toUpperCase(), final: !request.streaming };
+      },
+    });
+    const first = registry.read(reasoning('hello', true));
+    assert.equal(first.text, 'hello');
+    assert.equal(first.final, false);
+    broken = false;
+    notify();
+    const recovered = registry.read(reasoning('hello', true));
+    assert.equal(recovered.text, 'HELLO');
+  } finally {
+    console.warn = warn;
+  }
+});
+
+test('a transformer whose subscribe throws still registers and reads', () => {
+  const registry = createTextTransformRegistry();
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    const off = registry.register('body', {
+      subscribe() { throw new Error('no events'); },
+      read(request) { return request.text.toUpperCase(); },
+    });
+    assert.equal(registry.read({ text: 'ok', streaming: false, blockKey: 'b', kind: 'body', source: 'assistant' }).text, 'OK');
+    off();
+    assert.equal(registry.has('body'), false);
+  } finally {
+    console.warn = warn;
+  }
+});

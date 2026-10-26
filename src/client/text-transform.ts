@@ -71,6 +71,10 @@ function isKind(value: string): value is DisplayTextKind {
   return KINDS.has(value as DisplayTextKind);
 }
 
+function reportTransformError(error: unknown): void {
+  console.warn('[dsh-better-display] text transform failed; showing original text', error);
+}
+
 function passthrough(request: DisplayTextRequest): DisplayCursor {
   return { text: request.text, final: !request.streaming, transformRevision: 0, motionRevision: 0 };
 }
@@ -129,7 +133,11 @@ class TextTransformRegistryImpl implements TextTransformRegistry {
     const bound: { kind: DisplayTextKind; entry: StackEntry }[] = [];
     for (const item of requested) {
       const entry: StackEntry = { transformer };
-      entry.unsubscribe = transformer.subscribe?.(() => { this.emit(item); });
+      try {
+        entry.unsubscribe = transformer.subscribe?.(() => { this.emit(item); });
+      } catch (error) {
+        reportTransformError(error);
+      }
       const stack = this.stacks.get(item) ?? [];
       stack.push(entry);
       this.stacks.set(item, stack);
@@ -138,7 +146,7 @@ class TextTransformRegistryImpl implements TextTransformRegistry {
     }
     return () => {
       for (const { kind: item, entry } of bound) {
-        entry.unsubscribe?.();
+        try { entry.unsubscribe?.(); } catch (error) { reportTransformError(error); }
         const stack = this.stacks.get(item);
         if (!stack) continue;
         const next = stack.filter(candidate => candidate !== entry);
@@ -156,7 +164,16 @@ class TextTransformRegistryImpl implements TextTransformRegistry {
   read(request: DisplayTextRequest): DisplayCursor {
     const transformer = this.stacks.get(request.kind)?.at(-1)?.transformer;
     if (!transformer) return passthrough(request);
-    const display = normalize(transformer.read(request), request);
+    let display: DisplayText;
+    try {
+      display = normalize(transformer.read(request), request);
+    } catch (error) {
+      // A broken transformer must never hide the original text. Show it and
+      // ask again on the next text change or notify, so a recovered
+      // transformer takes over without a remount.
+      reportTransformError(error);
+      display = { text: request.text, final: !request.streaming };
+    }
     const key = `${request.kind}\u0000${request.blockKey}`;
     const next = nextDisplayCursor(this.cursors.get(key), display);
     this.cursors.set(key, next);
