@@ -24,6 +24,8 @@ function mount(options?: { containsFocus?: boolean; hidden?: boolean }) {
   const timers = new Map<number, { run: () => void; duration: number }>();
   const animations: Array<{ onfinish?: () => void; cancelled: number }> = [];
   const cutFocus = { id: 'focus-cut' };
+  const outside = { id: 'outside' };
+  const listeners = new Set<() => void>();
   const column = {
     id: 'reader-column',
     tabIndex: -1,
@@ -34,7 +36,7 @@ function mount(options?: { containsFocus?: boolean; hidden?: boolean }) {
     active: (options?.containsFocus ? cutFocus : null) as { id: string } | null,
   };
   const element = {
-    contains: (node: unknown) => options?.containsFocus === true && node === cutFocus,
+    contains: (node: unknown) => node === cutFocus,
     closest: (selector: string) => selector === '[data-chat-flow]' ? column : null,
     parentElement: null,
     getBoundingClientRect: () => ({ height: 64 }),
@@ -62,6 +64,8 @@ function mount(options?: { containsFocus?: boolean; hidden?: boolean }) {
     document: {
       get activeElement() { return page.active; },
       get hidden() { return page.hidden; },
+      addEventListener: (type: string, listener: () => void) => { if (type === 'visibilitychange') listeners.add(listener); },
+      removeEventListener: (type: string, listener: () => void) => { if (type === 'visibilitychange') listeners.delete(listener); },
     },
     window: {
       setTimeout: (run: () => void, duration: number) => { timers.set(++timerId, { run, duration }); return timerId; },
@@ -82,10 +86,13 @@ function mount(options?: { containsFocus?: boolean; hidden?: boolean }) {
     useEffect: effect,
   });
   assert.equal(typeof exports.RetiringContent, 'function');
+  type Rendered = { ref: { current: unknown }; props: { onBlur: (event: unknown) => void } };
+  let last: Rendered | null = null;
   const render = (visible: boolean) => {
     cursor = 0;
     pending = [];
-    const result = exports.RetiringContent!({ visible, children: 'narration' }) as { ref: { current: unknown } } | null;
+    const result = exports.RetiringContent!({ visible, children: 'narration' }) as Rendered | null;
+    last = result;
     if (result) result.ref.current = element;
     for (const { index, run, deps } of pending) {
       effects.get(index)?.cleanup?.();
@@ -95,8 +102,17 @@ function mount(options?: { containsFocus?: boolean; hidden?: boolean }) {
   };
   render(true);
   return {
-    render, timers, animations,
+    render, timers, animations, listeners,
     focusId: () => page.active?.id ?? '',
+    // Move focus out of the cut the way a real blur reports it.
+    blur: () => {
+      page.active = outside;
+      last?.props.onBlur({ currentTarget: element, relatedTarget: outside });
+    },
+    hide: () => {
+      page.hidden = true;
+      for (const listener of [...listeners]) listener();
+    },
     disableMotion: () => { enabled = false; },
     unmount: () => { for (const effect of effects.values()) effect.cleanup?.(); },
     deadline: () => {
@@ -176,4 +192,38 @@ test('reduced motion moves focus out of cut content before it unmounts', () => {
   assert.equal(playing.focusId(), 'focus-cut');
   assert.equal(playing.animations.length, 0);
   playing.unmount();
+});
+
+test('a page hidden while focus defers the collapse retires at once and keeps focus', () => {
+  const view = mount({ containsFocus: true });
+  assert.ok(view.render(false));
+  // The focus-held state re-runs the effect; it must keep waiting, not animate.
+  assert.ok(view.render(false));
+  assert.equal(view.focusId(), 'focus-cut');
+  assert.equal(view.animations.length, 0);
+  assert.equal(view.listeners.size, 1, 'the focus-held path still listens for a hidden page');
+  view.hide();
+  assert.equal(view.render(false), null);
+  assert.equal(view.focusId(), 'reader-column');
+  assert.equal(view.animations.length, 0);
+  assert.equal(view.timers.size, 0);
+  view.unmount();
+  assert.equal(view.listeners.size, 0);
+});
+
+test('focus leaving the cut still plays the collapse, bounded by its deadline', () => {
+  const view = mount({ containsFocus: true });
+  view.render(false);
+  view.render(false);
+  assert.equal(view.animations.length, 0);
+  view.blur();
+  assert.ok(view.render(false));
+  assert.equal(view.animations.length, 1);
+  assert.equal(view.listeners.size, 1);
+  view.deadline();
+  assert.equal(view.render(false), null);
+  assert.equal(view.focusId(), 'outside');
+  view.unmount();
+  assert.equal(view.listeners.size, 0);
+  assert.equal(view.timers.size, 0);
 });

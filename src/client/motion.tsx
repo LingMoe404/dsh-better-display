@@ -193,13 +193,26 @@ export function RetiringContent({ visible, children, onRetired }: { visible: boo
     // collapse that will actually play; it must not pin a reduced-motion rewind.
     // Move it to a surviving turn or the reading column first, or the browser
     // drops it on the document when this subtree unmounts.
-    if (!enabled || document.hidden) {
+    let retiredNow = false;
+    const retireNow = () => {
+      if (retiredNow) return;
+      retiredNow = true;
       animation.current?.cancel(); animation.current = null;
       focusSurvivesRetire(element);
-      setPresent(false); retired.current?.(); return;
+      setPresent(false); retired.current?.();
+    };
+    if (!enabled || document.hidden) { retireNow(); return; }
+    // The retiring-content harness stubs document without addEventListener.
+    const canListen = typeof document.addEventListener === 'function';
+    const holdsFocus = element.contains(document.activeElement);
+    if (holdsFocus || focusHeld) {
+      if (holdsFocus) setFocusHeld(true);
+      // Focus defers only a collapse that will play. `document.hidden` is not
+      // state, so a page hidden while focus waits must retire from here.
+      const onHiddenWhileHeld = () => { if (document.hidden) retireNow(); };
+      if (canListen) document.addEventListener('visibilitychange', onHiddenWhileHeld);
+      return () => { if (canListen) document.removeEventListener('visibilitychange', onHiddenWhileHeld); };
     }
-    if (element.contains(document.activeElement)) { setFocusHeld(true); return; }
-    if (focusHeld) return;
     const from = element.getBoundingClientRect().height;
     animation.current?.cancel(); animation.current = null;
     if (from < 1) { setPresent(false); retired.current?.(); return; }
@@ -215,8 +228,6 @@ export function RetiringContent({ visible, children, onRetired }: { visible: boo
     // #60: a stalled WAAPI finish must not leave the row mounted.
     const deadline = window.setTimeout(settle, 220 + 240);
     const onHide = () => { if (document.hidden) settle(); };
-    // The retiring-content harness stubs document without addEventListener.
-    const canListen = typeof document.addEventListener === 'function';
     if (canListen) document.addEventListener('visibilitychange', onHide);
     return () => {
       window.clearTimeout(deadline);
