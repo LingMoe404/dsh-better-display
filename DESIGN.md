@@ -6,7 +6,7 @@ Keep native DeepSeek Harness process information readable while separating the f
 
 ## Content fidelity
 
-- Preserve literal reasoning text, whitespace, source order and block identity.
+- Preserve literal reasoning text, whitespace, source order and block identity. An opt-in display transformer may paint different glyphs; it does not change the stored block. With no transformer installed, the painted text stays literal.
 - Do not infer reasoning from wording, parse private provider logs, rewrite prompts or alter model settings.
 - Preserve native context sources, tool types, summaries, filenames, details and results.
 - Preserve the native conversation, input, model selector and approval system.
@@ -57,6 +57,34 @@ Manual reading, selection and keyboard access take precedence over automatic fol
 ## Extensions and safety
 
 Trusted plugins may register `dsh-better-display.block`. Native content remains the fallback. Generative MCP Apps (SEP-1865 / `io.modelcontextprotocol/ui`) are supported via an isolated, sandboxed iframe (`sandbox="allow-scripts allow-forms"`, strictly without `allow-same-origin`) communicating via bidirectional JSON-RPC `postMessage` (`ui/initialize`, `ui/resize`, `ui/update-model-context`, `ui/submit`).
+
+### Block chain owner
+
+`renderSlotChain('dsh-better-display.block', owner)` passes the session block plus the display inputs the Reader already has. The original fields stay `block`, `streaming`, and `source`. These are added and may be omitted by an older caller:
+
+| Field | Meaning |
+| --- | --- |
+| `presentation.startedAt` | Assistant step time, when the Reader has one. |
+| `presentation.interrupted` | This step was interrupted. |
+| `presentation.liveText` | This block may run the live reveal. |
+| `holdFormatting` | A text selection is holding Markdown formatting in place. |
+| `liveText` | Same boolean as `presentation.liveText`. |
+
+A registrant that only reads `block`, `streaming`, and `source` keeps working. Replacing the chain still means that registrant draws the block. The fallback Reader keeps reveal, follow-scroll, and fold. The full shape and a copy-paste plugin are in [docs/extension-points.md](docs/extension-points.md).
+
+### Display text transform
+
+Service name: `dsh-better-display.text-transform`. Another client plugin lists that name in `inject` and registers a transformer. Kinds are `reasoning` (the thinking card) and `body` (assistant Markdown, and tool prose that uses the same reader). The request is `{ text, streaming, blockKey, kind, source }`. `read` may return a string, `{ text, final }`, or `undefined` to keep the source. `subscribe` tells the reader that a later batch changed what `read` will return.
+
+No registrant means the reader never calls `read` and never subscribes. Painted text, reveal, and fold stay as they are.
+
+The transformer is display-only. It must not write the session, the transcript, or the block object. Copy answer and copy message read the original blocks. Fold still follows the public turn boundary and the original block list.
+
+`final: false` keeps the live reveal open, including after the model has stopped while a batch is still out. A transformer that returns `final: !streaming` leaves the reveal flag unchanged.
+
+Each displayed string has its own `transformRevision`. That counter is not the reveal clock. The reveal continues when the new display string extends the previous one, so a translated batch that only appends does not replay the fade from the first character. A string that does not extend the previous one settles in place instead of typing again from empty. Plugins that want the fade to continue should return a string that starts with the previous display string. Do not use `transformRevision` as a React key or as the word-timeline revision.
+
+Register during plugin apply, before the reading view paints. A transformer registered mid-turn is picked up on the next reader render.
 
 ## Host DOM hooks
 

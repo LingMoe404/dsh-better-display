@@ -129,6 +129,9 @@ export const McpAppFrame = memo(function McpAppFrame({
         return;
       }
 
+      // ui/ready is a notification. The frame has no ready flag to flip.
+      if (data.method === 'ui/ready' || data.method === 'ui/notifications/initialized') return;
+
       // ui/resize
       if (data.method === 'ui/resize' && data.params?.height) {
         const h = Number(data.params.height);
