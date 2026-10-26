@@ -26,17 +26,20 @@
 .turnStickyRegion { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .turnStickyLanes { position: sticky; top: max(var(--reader-toolbar-height, 40px), var(--reader-status-height, 40px)); z-index: 6; display: flex; flex-direction: column; min-width: 0; }
 .turn + .turn { margin-top: 12px; }
-/* Host .userStack uses min(column * 0.702, 82%). align-self:flex-end with only a
-   max-width shrinks this cluster to the text, and that 82% then resolves against
-   the shrink-wrap. width is the same formula, so the percentage sees the column.
-   The slot outlet is display:contents, so a direct-child max-width never reaches
-   .userStack; cap the host row and the stack at this definite width instead. */
-.userCluster { display: flex; flex-direction: column; align-self: flex-end; align-items: flex-end; width: min(calc(var(--dsh-chat-content-width, 748px) * 0.702), 82%); max-width: 100%; gap: 8px; min-width: 0; margin-bottom: 4px; }
-.userCluster [data-slot="conversation.chat.node"] > *,
-.userCluster [data-slot="conversation.chat.node"] > * > * { max-width: 100%; }
-.userImages { display: flex; flex-direction: column; align-items: flex-end; max-width: 100%; min-width: 0; }
+/* Host .userStack caps itself with min(axis * 0.702, 82%). In the native column
+   that percentage resolves against a .userRow stretched across the column. The
+   slot outlet is display:contents, so the host row is this cluster's flex item.
+   Naming the official slot here misses the mirrored seat
+   (dsh-better-display.official.nodes/…), the row shrink-wraps to the text, and
+   the same 82% is applied again. The cluster fills the column. The direct child
+   of its own slot — the host row, not a nested image slot — stretches with it.
+   The host .userStack is left alone. Pending bubbles are not that row, so they
+   carry the same cap themselves. */
+.userCluster { display: flex; flex-direction: column; align-self: stretch; align-items: flex-end; width: 100%; max-width: 100%; gap: 8px; min-width: 0; margin-bottom: 4px; }
+.userCluster > [data-slot] > * { align-self: stretch; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+.userImages { display: flex; flex-direction: column; align-items: flex-end; align-self: flex-end; width: fit-content; max-width: 100%; min-width: 0; }
 .userImages .imageFigure { align-self: flex-end; }
-.user { align-self: flex-end; max-width: 100%; padding: 10px 16px; border-radius: var(--dsw-radius-xl, 22px); background: var(--dsw-specific-bubble); color: var(--dsw-alias-label-primary); font-size: var(--dsh-content-font-size, 14px); line-height: calc(22px + var(--dsh-content-font-delta, 0px)); font-weight: 400; white-space: pre-wrap; overflow-wrap: anywhere; box-sizing: border-box; }
+.user { align-self: flex-end; width: fit-content; max-width: min(calc(var(--dsh-chat-content-width, 748px) * 0.702), 82%); margin-left: auto; padding: 10px 16px; border-radius: var(--dsw-radius-xl, 22px); background: var(--dsw-specific-bubble); color: var(--dsw-alias-label-primary); font-size: var(--dsh-content-font-size, 14px); line-height: calc(22px + var(--dsh-content-font-delta, 0px)); font-weight: 400; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; box-sizing: border-box; }
 .user .blocks { gap: 10px; }
 .answer { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
 .readingText { min-width: 0; }

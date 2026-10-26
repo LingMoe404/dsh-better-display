@@ -21,8 +21,9 @@ test('official user output stays inside the cluster that carries the host width'
   const source = readFileSync(join(root, 'src/client/Reader.tsx'), 'utf8');
   const css = readFileSync(join(root, 'src/client/Reader.module.css'), 'utf8');
   assert.match(source, /className=\{css\.userCluster\}[^>]*data-reader-key=\{nodeKey\}[^>]*>\{rendered\}/);
-  assert.match(css, /\.userCluster\s*\{[^}]*width:\s*min\(calc\(var\(--dsh-chat-content-width,\s*748px\)\s*\*\s*0\.702\),\s*82%\)/);
-  assert.match(css, /\.userCluster \[data-slot="conversation\.chat\.node"\] > \* > \* \{ max-width: 100%; \}/);
+  assert.match(css, /\.userCluster\s*\{[^}]*width:\s*100%/);
+  assert.match(css, /\.userCluster > \[data-slot\] > \* \{[^}]*width:\s*100%/);
+  assert.doesNotMatch(css, /\[data-slot="conversation\.chat\.node"\]/);
 });
 
 test('headless Reader users retain official renderers, anchors and empty-key fallback', { skip }, async () => {
