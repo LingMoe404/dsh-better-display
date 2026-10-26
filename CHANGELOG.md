@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add a display-only text transform seam (`dsh-better-display.text-transform`) so another plugin can rewrite reasoning and answer text before the reading reveal. The session, the transcript, and the fold stay on the original blocks. Copy still uses the original answer. An appended transform batch keeps the reveal going instead of starting it over. The `dsh-better-display.block` chain owner now also receives `presentation`, `holdFormatting`, and `liveText`. Thanks @lin636 (#62).
+
 ## 0.3.8 — 2026-10-13
 
 - Fix host entry bundling in tsdown: stop externalising relative host imports and add a portable output build guard to prevent missing bundled modules (`ERR_MODULE_NOT_FOUND ./skill-roots.ts`, #58, #59, #61).

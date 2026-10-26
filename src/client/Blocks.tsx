@@ -1,4 +1,4 @@
-import { Component, Fragment, memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Component, Fragment, memo, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment';
 import type { AssistantBlock, UserMessageNode } from '@deepseek-ai/dsh-client-ui-conversation/client';
@@ -9,6 +9,8 @@ import { markdownLabels, truncatedJsonLabel } from './primitive-labels.js';
 import type { BlockRenderProps, ReaderBlockOwner } from './types.js';
 import { useStreamingText } from './streaming.js';
 import { MotionMarkdown, MotionPlainText } from './word-motion.js';
+import { activeTextTransform, displayStreaming, originalAnswerText, readerBlockOwner, useDisplayText } from './text-transform.js';
+import type { TextTransformRegistry } from './text-transform.js';
 import css from './Reader.module.css';
 
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
@@ -82,7 +84,16 @@ export function contentBlocks(content: UserMessageNode['content']): AssistantBlo
 
 type TextPresentation = { startedAt?: number; interrupted?: boolean; liveText?: boolean };
 
-function ReadingMarkdown({ text, streaming, holdFormatting, startedAt, interrupted = false, liveText = false, kind = 'body', fileMentions }: { text: string; streaming: boolean; holdFormatting: boolean; kind?: 'body' | 'reasoning'; fileMentions?: BlockRenderProps['fileMentions'] } & TextPresentation) {
+type MarkdownStreamProps = {
+  text: string;
+  streaming: boolean;
+  holdFormatting: boolean;
+  kind?: 'body' | 'reasoning';
+  fileMentions?: BlockRenderProps['fileMentions'];
+  transformed?: boolean;
+} & TextPresentation;
+
+function MarkdownStream({ text, streaming, holdFormatting, startedAt, interrupted = false, liveText = false, kind = 'body', fileMentions, transformed = false }: MarkdownStreamProps) {
   const root = useRef<HTMLDivElement>(null);
   const presentation = useStreamingText(text, streaming, { startedAt, interrupted: interrupted || !liveText, selected: holdFormatting });
   // Native Markdown changes block keys for its full final parse. Keep the last
@@ -92,24 +103,50 @@ function ReadingMarkdown({ text, streaming, holdFormatting, startedAt, interrupt
   const effectiveMode = holdFormatting ? committedMode.current : presentation.formatStreaming;
   useLayoutEffect(() => { committedMode.current = effectiveMode; }, [effectiveMode]);
   return <div ref={root} className={css.readingText} data-reader-text data-reader-text-kind={kind} data-received-length={text.length} data-shown-length={presentation.text.length}
-    data-presentation-pending={presentation.pending || undefined} data-motion-style="opacity-blur" data-ud-motion="reader-text-arrival" data-ud-motion-type="reveal" data-ud-motion-no-flash="true">
+    data-presentation-pending={presentation.pending || undefined} data-motion-style="opacity-blur" data-ud-motion="reader-text-arrival" data-ud-motion-type="reveal" data-ud-motion-no-flash="true"
+    data-text-transform={transformed ? (streaming ? 'live' : 'final') : undefined}>
     <MotionMarkdown text={presentation.text} streaming={effectiveMode} enabled={liveText && presentation.reveal && effectiveMode} revision={presentation.revision} fileMentions={fileMentions} />
   </div>;
 }
 
-function ReadingReasoning({ text, streaming, holdFormatting, startedAt, interrupted = false, liveText = false }: { text: string; streaming: boolean; holdFormatting: boolean } & TextPresentation) {
+function TransformedMarkdown({ registry, blockKey, source, text, streaming, ...props }: MarkdownStreamProps & { registry: TextTransformRegistry; blockKey: string; source: ReaderBlockOwner['source'] }) {
+  const shown = useDisplayText(registry, { text, streaming, blockKey, kind: 'body', source });
+  return <MarkdownStream {...props} text={shown.text} streaming={displayStreaming(streaming, shown, true)} transformed />;
+}
+
+function ReadingMarkdown({ blockKey, source, ...props }: MarkdownStreamProps & { blockKey: string; source: ReaderBlockOwner['source'] }) {
+  const registry = activeTextTransform();
+  if (registry?.has('body')) return <TransformedMarkdown registry={registry} blockKey={blockKey} source={source} {...props} />;
+  return <MarkdownStream {...props} />;
+}
+
+type ReasoningStreamProps = { text: string; streaming: boolean; holdFormatting: boolean; transformed?: boolean } & TextPresentation;
+
+function ReasoningStream({ text, streaming, holdFormatting, startedAt, interrupted = false, liveText = false, transformed = false }: ReasoningStreamProps) {
   const presentation = useStreamingText(text, streaming, { startedAt, interrupted: interrupted || !liveText, selected: holdFormatting });
   return <div className={css.readingText} data-reader-text data-reader-text-kind="reasoning" data-received-length={text.length} data-shown-length={presentation.text.length}
-    data-presentation-pending={presentation.pending || undefined} data-motion-style="opacity-blur" data-ud-motion="reader-text-arrival" data-ud-motion-type="reveal" data-ud-motion-no-flash="true">
+    data-presentation-pending={presentation.pending || undefined} data-motion-style="opacity-blur" data-ud-motion="reader-text-arrival" data-ud-motion-type="reveal" data-ud-motion-no-flash="true"
+    data-text-transform={transformed ? (streaming ? 'live' : 'final') : undefined}>
     <MotionPlainText text={presentation.text} enabled={liveText && presentation.reveal} revision={presentation.revision} />
   </div>;
 }
 
-function fallback(block: AssistantBlock, streaming: boolean, source: ReaderBlockOwner['source'], loadImage: BlockRenderProps['loadImage'], fillComposer: BlockRenderProps['fillComposer'], holdFormatting: boolean, presentation: TextPresentation, fileMentions?: BlockRenderProps['fileMentions']): ReactNode {
+function TransformedReasoning({ registry, blockKey, source, text, streaming, ...props }: ReasoningStreamProps & { registry: TextTransformRegistry; blockKey: string; source: ReaderBlockOwner['source'] }) {
+  const shown = useDisplayText(registry, { text, streaming, blockKey, kind: 'reasoning', source });
+  return <ReasoningStream {...props} text={shown.text} streaming={displayStreaming(streaming, shown, true)} transformed />;
+}
+
+function ReadingReasoning({ blockKey, source, ...props }: ReasoningStreamProps & { blockKey: string; source: ReaderBlockOwner['source'] }) {
+  const registry = activeTextTransform();
+  if (registry?.has('reasoning')) return <TransformedReasoning registry={registry} blockKey={blockKey} source={source} {...props} />;
+  return <ReasoningStream {...props} />;
+}
+
+function fallback(block: AssistantBlock, streaming: boolean, source: ReaderBlockOwner['source'], loadImage: BlockRenderProps['loadImage'], fillComposer: BlockRenderProps['fillComposer'], holdFormatting: boolean, presentation: TextPresentation, blockKey: string, fileMentions?: BlockRenderProps['fileMentions']): ReactNode {
   switch (block.kind) {
-    case 'text': return source === 'user' ? <MarkdownText text={block.text} labels={markdownLabels} /> : <ReadingMarkdown text={block.text} streaming={streaming} holdFormatting={holdFormatting} {...presentation} fileMentions={fileMentions} />;
+    case 'text': return source === 'user' ? <MarkdownText text={block.text} labels={markdownLabels} /> : <ReadingMarkdown text={block.text} streaming={streaming} holdFormatting={holdFormatting} {...presentation} fileMentions={fileMentions} blockKey={blockKey} source={source} />;
     case 'image': return <ImageBlock attachment={block.attachment} loadImage={loadImage} />;
-    case 'reasoning': return <ReadingReasoning text={block.text} streaming={streaming} holdFormatting={holdFormatting} {...presentation} />;
+    case 'reasoning': return <ReadingReasoning text={block.text} streaming={streaming} holdFormatting={holdFormatting} {...presentation} blockKey={blockKey} source={source} />;
     case 'tool-call': return <JsonBlock label={`工具参数 · ${block.name}`} payload={block.argsRaw} truncatedLabel={truncatedJsonLabel} />;
     case 'other': {
       const raw = block.block;
@@ -130,10 +167,11 @@ function fallback(block: AssistantBlock, streaming: boolean, source: ReaderBlock
 export const Blocks = memo(function Blocks({ blocks, streaming = false, source = 'assistant', holdFormatting = false, startedAt, interrupted, liveText, renderSlotChain, loadImage, fillComposer, fileMentions }: BlockRenderProps & TextPresentation & {
   blocks: readonly AssistantBlock[]; streaming?: boolean; source?: ReaderBlockOwner['source']; holdFormatting?: boolean;
 }) {
+  const reactId = useId();
   return <ComposerFillContext.Provider value={fillComposer}>
     <div className={css.blocks} data-streaming={streaming || undefined}>
       {blocks.map((block, index) => <BlockBoundary key={block.kind === 'image' ? `image:${block.attachment.attachmentId}:${index}` : `${index}:${block.kind}`}>
-        <Fragment>{renderSlotChain('dsh-better-display.block', { block, streaming, source }, { fallback: fallback(block, streaming, source, loadImage, fillComposer, holdFormatting, { startedAt, interrupted, liveText }, fileMentions) })}</Fragment>
+        <Fragment>{renderSlotChain('dsh-better-display.block', readerBlockOwner(block, streaming, source, { startedAt, interrupted, liveText }, holdFormatting), { fallback: fallback(block, streaming, source, loadImage, fillComposer, holdFormatting, { startedAt, interrupted, liveText }, `${reactId}:${index}:${block.kind}`, fileMentions) })}</Fragment>
       </BlockBoundary>)}
     </div>
   </ComposerFillContext.Provider>;
@@ -164,7 +202,8 @@ function MessageClock({ time }: { time: number }) {
 
 export function CopyAnswer({ blocks, onFork, metrics, extraActions }: { blocks: readonly AssistantBlock[]; onFork?: () => void; metrics?: BlockRenderProps['metrics']; extraActions?: ReactNode }) {
   const { receipt, copy } = useCopyReceipt();
-  const text = blocks.filter((block): block is Extract<AssistantBlock, { kind: 'text' }> => block.kind === 'text').map(block => block.text).join('\n\n');
+  // Session text. A display transformer does not write these blocks.
+  const text = originalAnswerText(blocks);
   const endedAt = metrics?.endedAt;
   const hasMetrics = metrics !== undefined && (metrics.usage !== undefined || metrics.runMs !== undefined || endedAt !== undefined);
   if (!text.trim() && !onFork && !hasMetrics) return null;

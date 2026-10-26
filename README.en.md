@@ -24,6 +24,8 @@ This official CLI command writes only the `web` profile; it cannot modify the De
 
 Adds a **阅读** tab to DeepSeek Harness. While a turn runs you see steps, thinking, and progress. After a successful turn those collapse and the final answer stays. Native Chat / Trajectory, the composer, model picker, tools, and approvals stay. The reading column keeps ChatView's `data-chat-flow` hook so third-party skins that gate the composer on that mark still treat Reader as an interactive conversation.
 
+Another plugin can rewrite reasoning and answer text for display only, for example to translate them. The reader still owns the reveal, follow-scroll, and fold. Copy uses the original text, and the session record is unchanged. The contract and a minimal plugin are in [extension points](docs/extension-points.md).
+
 A ````mcp-app` fence in the final answer mounts as an interactive card in the reading view, inside `<iframe sandbox="allow-scripts allow-forms">` without `allow-same-origin`. The card can fill the next prompt via JSON-RPC. The skill pack is [`skills/generative-mcpapps/`](skills/generative-mcpapps/). Settings → **Better Display** can preview deliverables in the right Sidebar (system app remains the default), turn on translucent frosted glass (off by default), toggle process auto-folding (On is the default), and reports whether that skill is installed in a harness skill root.
 
 Targets DeepSeek Harness **0.2.0-rc.2** (`dsh-v0.2.0-rc.2`). Display only. It does not change Agent execution, the SDK, or credentials. Node.js `^22.19.0 || >=24`. New sessions default to reading. The `@deepseek-ai/dsh-*` peer range is `>=0.2.0-rc.1 <0.2.1`: it accepts `0.2.0-rc.2` and stable `0.2.0`, rejects `0.2.0` alphas, and rejects `0.1.7-rc.2`.

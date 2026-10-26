@@ -19,6 +19,7 @@ import { fileAddressFor, modeFromSnapshot, openDeliverableFile } from './open-fi
 import type { ReaderInjected } from './types.js';
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment';
 import { installOfficialSlots, officialChildren, type CompositionRegistry } from './official-slots.js';
+import { TEXT_TRANSFORM_SERVICE, createTextTransformRegistry, installTextTransformRegistry } from './text-transform.js';
 
 /** Structural face of the sanctioned per-session composer writer. */
 interface ComposerShell {
@@ -54,8 +55,10 @@ async function openWorkspacePath(
   }
 }
 
-export type { ReaderBlockOwner } from './types.js';
+export type { ReaderBlockOwner, ReaderBlockPresentation } from './types.js';
+export type { DisplayCursor, DisplayText, DisplayTextKind, DisplayTextRequest, DisplayTextTransformer, TextTransformRegistry } from './text-transform.js';
 export { McpAppFrame } from './McpAppFrame.js';
+export { TEXT_TRANSFORM_SERVICE, createTextTransformRegistry, originalAnswerText } from './text-transform.js';
 export const name = 'dsh-better-display-client';
 export const inject = ['slots', 'sessions', 'conversation', 'uiConversation', 'remote', 'remote.session'];
 
@@ -63,6 +66,10 @@ export const inject = ['slots', 'sessions', 'conversation', 'uiConversation', 'r
 ensureStyles();
 
 export function apply(ctx: Context): void {
+  const textTransform = createTextTransformRegistry();
+  const restoreTextTransform = installTextTransformRegistry(textTransform);
+  ctx.provide(TEXT_TRANSFORM_SERVICE, textTransform);
+  ctx.effect(() => restoreTextTransform);
   const store = createReaderStore();
   // conversation.view is session-scoped, so session persist keys are
   // `dsh.reader.v1.<sessionId>`. One root instance keeps glass, fold
