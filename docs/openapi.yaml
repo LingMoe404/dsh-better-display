@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: dsh-better-display
-  version: 0.3.8
+  version: 0.3.9
   description: >
     Exact routes registered by apply() in src/dsh-better-display.ts.
     POST /better-display/reveal is createRevealHandler in src/reveal.ts.
