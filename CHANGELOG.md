@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Keep the elapsed-time row and the closed process summary from painting over the answer heading when a third-party theme clears `--dsw-alias-bg-base` or raises `--dsh-content-font-size`. Sticky bands follow the measured row and the host font delta, and a transparent canvas falls back to the opaque surface token (#66).
+- Keep the elapsed-time row and the closed process summary from painting over the answer heading when a third-party theme clears or fades `--dsw-alias-bg-base`, or raises `--dsh-content-font-size`. Sticky bands follow the measured row, stay at least 40px, and each Reader owns its own lane heights. A transparent or 10% token composites over `Canvas` (the page surface), not the text colour (#66).
 
 ## 0.3.8 — 2026-10-13
 

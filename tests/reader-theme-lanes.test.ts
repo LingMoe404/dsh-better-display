@@ -7,7 +7,7 @@ import { externalClientBundle } from '../tools/client-build.js';
 const css = readFileSync(resolve('src/client/Reader.module.css'), 'utf8');
 
 test('sticky lanes follow the host font delta and measured row heights', () => {
-  assert.match(css, /--reader-lane-block:\s*calc\(40px \+ var\(--dsh-content-font-delta, 0px\)\)/);
+  assert.match(css, /--reader-lane-block:\s*max\(40px,\s*calc\(40px \+ var\(--dsh-content-font-delta, 0px\)\)\)/);
   assert.match(css, /font-size:\s*calc\(14px \+ var\(--dsh-content-font-delta, 0px\)\)/);
   assert.match(css, /line-height:\s*calc\(24px \+ var\(--dsh-content-font-delta, 0px\)\)/);
   assert.match(
@@ -21,10 +21,18 @@ test('sticky lanes follow the host font delta and measured row heights', () => {
 test('a transparent canvas still masks the lane with the surface token', () => {
   assert.match(css, /--reader-lane-plate:\s*linear-gradient\(var\(--dsw-alias-bg-base\)/);
   assert.match(css, /linear-gradient\(var\(--dsw-alias-bg-layer-1, transparent\)/);
+  assert.doesNotMatch(css, /--reader-lane-plate:[^;]*label-primary/);
+  assert.doesNotMatch(css, /--reader-lane-plate:[^;]*color-mix/);
+  assert.match(css, /background-color:\s*Canvas/);
   assert.match(css, /background-image:\s*var\(--reader-lane-plate\)/);
+  assert.match(css, /\.turnProcessSticky \{ box-shadow:[^;]*\bCanvas\b/);
+  assert.doesNotMatch(css, /\.turnProcessSticky \{ box-shadow:[^;]*label-primary/);
+  assert.match(css, /\.closedProcessSummary \{ box-shadow:[^;]*\bCanvas\b/);
+  assert.match(css, /\.flowCell\[data-flow-summary\] \{ box-shadow:[^;]*\bCanvas\b/);
   assert.match(css, /\.root\[data-reader-glass\] \.turnProcessSticky/);
   const glass = css.slice(css.indexOf('Skin mode is opt-in'));
   assert.match(glass, /background:\s*transparent/);
+  assert.doesNotMatch(glass, /background-color:\s*Canvas/);
 });
 
 test('built Reader CSS keeps the lane plate and the measured summary offset', async () => {
@@ -38,7 +46,9 @@ test('built Reader CSS keeps the lane plate and the measured summary offset', as
   const built: unknown = JSON.parse(literal);
   assert.equal(typeof built, 'string');
   if (typeof built !== 'string') return;
-  assert.match(built, /--reader-lane-block:calc\(40px \+ var\(--dsh-content-font-delta,0px\)\)/);
+  assert.match(built, /--reader-lane-block:max\(40px, calc\(40px \+ var\(--dsh-content-font-delta,0px\)\)\)/);
   assert.match(built, /--dsw-alias-bg-layer-1,transparent/);
+  assert.match(built, /background-color:canvas/);
+  assert.doesNotMatch(built, /--reader-lane-plate:[^;]*label-primary/);
   assert.match(built, /var\(--reader-toolbar-height,var\(--reader-lane-block,40px\)\) \+ var\(--reader-status-height,var\(--reader-lane-block,40px\)\)/);
 });
