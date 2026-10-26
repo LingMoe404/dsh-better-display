@@ -47,12 +47,24 @@ export type LiveTurnItem = {
 };
 export declare function liveFoldEnabled(boundary: TurnBoundary): boolean;
 export declare function foldSummary(steps: readonly LiveStep[]): string;
-/** One chain: fold only when a new reasoning step has prior body/tool/reasoning. */
-export declare function splitChain(chain: readonly LiveStep[]): {
-    fold: readonly LiveStep[] | null;
-    open: readonly LiveStep[];
-};
 /** Expand readerFlow into source-ordered live steps using existing block boundaries. */
 export declare function segmentLiveTurn(flow: readonly ReaderFlowEntry[], get: (key: string) => ChatConversationViewNode | undefined): LiveStep[];
+/**
+ * One live chain: narration stays visible, while every earlier reasoning/tool
+ * run collapses into its own box at its original position.
+ */
 export declare function presentLiveTurn(steps: readonly LiveStep[], boundary: TurnBoundary, autoFold?: boolean): LiveTurnItem[];
+/**
+ * Summaries for collapsed process that sits between two narration blocks.
+ *
+ * A live-fold cell already shows that summary while the turn is open. Drawing
+ * the seam as well repeats the same counts, so a run whose every step is
+ * already inside a fold cell contributes neither a seam nor `after`. `after`
+ * is what marks the previous body with `data-reader-seam-after` and drops its
+ * bottom padding; skipping the seam must leave that spacing alone.
+ */
+export declare function planProcessSeams(steps: readonly LiveStep[], liveItems: readonly LiveTurnItem[], expanded: boolean): {
+    before: Map<string, string>;
+    after: Set<string>;
+};
 //# sourceMappingURL=live-turn.d.ts.map

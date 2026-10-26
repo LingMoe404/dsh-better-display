@@ -5,10 +5,28 @@ import type { PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@d
 import type { createReaderStore } from './store.js';
 import type { OfficialSeat } from './official-slots.js';
 import type { OpenFileOptions, TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client';
+/**
+ * Display inputs the Reader already computed for this block.
+ * Older callers may omit the object. Registrants must tolerate that.
+ */
+export interface ReaderBlockPresentation {
+    /** Assistant step time, when the Reader has one. */
+    startedAt?: number;
+    /** True when this step was interrupted. */
+    interrupted?: boolean;
+    /** True when this block may run the live reveal. */
+    liveText?: boolean;
+}
 export interface ReaderBlockOwner {
     block: AssistantBlock;
     streaming: boolean;
     source: 'assistant' | 'user' | 'tool';
+    /** Viewport and motion inputs. Absent on owners built before this field existed. */
+    presentation?: ReaderBlockPresentation;
+    /** Selection is holding Markdown formatting in place. */
+    holdFormatting?: boolean;
+    /** Same value as `presentation.liveText`, repeated so a registrant can read it directly. */
+    liveText?: boolean;
 }
 declare module '@deepseek-ai/dsh-client-ui-slots' {
     interface SlotMap {

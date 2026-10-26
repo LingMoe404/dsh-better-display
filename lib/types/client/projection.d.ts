@@ -13,12 +13,25 @@ export interface TurnBoundary {
 }
 export declare function groupNodes(order: readonly string[], get: (key: string) => ChatConversationViewNode | undefined): ReaderGroup[];
 export declare function boundaryOf(turn: TurnLocation | undefined): TurnBoundary;
+/**
+ * A settled body step before the closing step of a successful turn.
+ *
+ * This is presentation classification only. Narration is never process content
+ * and never folds. The flag only marks body text that is no longer the turn's
+ * final answer, so copy and fork stay on that final answer.
+ */
 export declare function isEarlierNarration(data: AssistantChatData, boundary: TurnBoundary): boolean;
 export declare function processExpanded(choice: boolean | undefined, boundary: TurnBoundary): boolean;
 /** Reading while running must not pin the process open after completion. */
 export declare function processChoiceKey(groupKey: string, boundary: TurnBoundary): string;
-/** A body-only assistant step is not a thinking/process disclosure. */
-export declare function hasProcessContent(node: ChatConversationViewNode | undefined, boundary: TurnBoundary): boolean;
+/**
+ * A body-only assistant step is not a thinking/process disclosure.
+ *
+ * Narration (text/image/other blocks) is always visible, so it never counts as
+ * foldable process content; only literal reasoning does. Tool calls arrive as
+ * their own flow entries and are checked separately by the reader.
+ */
+export declare function hasProcessContent(node: ChatConversationViewNode | undefined, _boundary: TurnBoundary): boolean;
 export declare function hasVisibleBody(blocks: readonly AssistantBlock[]): boolean;
 /** Keep native block order. In particular, never lift a later Think above text. */
 export declare function assistantSegments(blocks: readonly AssistantBlock[]): {
