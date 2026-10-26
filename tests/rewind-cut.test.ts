@@ -1036,3 +1036,33 @@ test('re-rendering or streaming a turn does not retire it; a rewind does', () =>
   );
   assert.equal(rewound[1]?.group.text, 'world plus tokens');
 });
+
+test('loading older history follows the incoming turn order', () => {
+  const keep = { key: 'turn:20' };
+  const older = { key: 'turn:19' };
+  const current = reconcileTurnSlots([], [keep]);
+  const prepended = reconcileTurnSlots(current, [older, keep]);
+  assert.deepEqual(prepended.map(slot => [slot.group.key, slot.live]), [
+    ['turn:19', true],
+    ['turn:20', true],
+  ]);
+  assert.equal(reconcileTurnSlots(prepended, [older, keep]), prepended);
+
+  const tail = { key: 'turn:21' };
+  const withTail = reconcileTurnSlots([], [keep, tail]);
+  const olderBesideDeparting = reconcileTurnSlots(withTail, [older, keep]);
+  assert.deepEqual(olderBesideDeparting.map(slot => [slot.group.key, slot.live]), [
+    ['turn:19', true],
+    ['turn:20', true],
+    ['turn:21', false],
+  ]);
+
+  const leading = { key: 'turn:1' };
+  const following = { key: 'turn:2' };
+  const opened = reconcileTurnSlots([], [leading, following]);
+  const droppedHead = reconcileTurnSlots(opened, [following]);
+  assert.deepEqual(droppedHead.map(slot => [slot.group.key, slot.live]), [
+    ['turn:1', false],
+    ['turn:2', true],
+  ]);
+});

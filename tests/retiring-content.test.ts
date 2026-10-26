@@ -14,7 +14,7 @@ const compiled = ts.transpileModule(`const EASING = 'cubic-bezier(.22,1,.36,1)';
 
 // Drive the component's real effect with deterministic hooks and a compositor
 // that never finishes unless the test explicitly sends onfinish.
-function mount() {
+function mount(options?: { containsFocus?: boolean; hidden?: boolean }) {
   let cursor = 0;
   let enabled = true;
   const hooks: unknown[] = [];
@@ -23,8 +23,20 @@ function mount() {
   let timerId = 0;
   const timers = new Map<number, { run: () => void; duration: number }>();
   const animations: Array<{ onfinish?: () => void; cancelled: number }> = [];
+  const cutFocus = { id: 'focus-cut' };
+  const column = {
+    id: 'reader-column',
+    tabIndex: -1,
+    focus() { page.active = column; },
+  };
+  const page = {
+    hidden: options?.hidden ?? false,
+    active: (options?.containsFocus ? cutFocus : null) as { id: string } | null,
+  };
   const element = {
-    contains: () => false,
+    contains: (node: unknown) => options?.containsFocus === true && node === cutFocus,
+    closest: (selector: string) => selector === '[data-chat-flow]' ? column : null,
+    parentElement: null,
     getBoundingClientRect: () => ({ height: 64 }),
     animate: (_frames: unknown, options: { duration: number; fill: string }) => {
       assert.equal(options.duration, 220);
@@ -45,7 +57,12 @@ function mount() {
     require: createRequire(import.meta.url),
     css: { retiringContent: 'retiring' },
     StreamMotionContext: {},
-    document: { activeElement: null },
+    HTMLElement: globalThis.HTMLElement,
+    Element: globalThis.Element,
+    document: {
+      get activeElement() { return page.active; },
+      get hidden() { return page.hidden; },
+    },
     window: {
       setTimeout: (run: () => void, duration: number) => { timers.set(++timerId, { run, duration }); return timerId; },
       clearTimeout: (id: number) => { timers.delete(id); },
@@ -79,6 +96,7 @@ function mount() {
   render(true);
   return {
     render, timers, animations,
+    focusId: () => page.active?.id ?? '',
     disableMotion: () => { enabled = false; },
     unmount: () => { for (const effect of effects.values()) effect.cleanup?.(); },
     deadline: () => {
@@ -134,4 +152,28 @@ test('disabled motion retires immediately without an animation or timer', () => 
   assert.equal(view.animations.length, 0);
   assert.equal(view.timers.size, 0);
   view.unmount();
+});
+
+test('reduced motion moves focus out of cut content before it unmounts', () => {
+  const reduced = mount({ containsFocus: true });
+  reduced.disableMotion();
+  reduced.render(false);
+  assert.equal(reduced.render(false), null);
+  assert.equal(reduced.focusId(), 'reader-column');
+  assert.equal(reduced.animations.length, 0);
+  reduced.unmount();
+
+  const hidden = mount({ containsFocus: true, hidden: true });
+  hidden.render(false);
+  assert.equal(hidden.render(false), null);
+  assert.equal(hidden.focusId(), 'reader-column');
+  assert.equal(hidden.animations.length, 0);
+  hidden.unmount();
+
+  // The animated path still defers while focus is inside the cut.
+  const playing = mount({ containsFocus: true });
+  assert.ok(playing.render(false));
+  assert.equal(playing.focusId(), 'focus-cut');
+  assert.equal(playing.animations.length, 0);
+  playing.unmount();
 });

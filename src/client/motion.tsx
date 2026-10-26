@@ -191,8 +191,11 @@ export function RetiringContent({ visible, children, onRetired }: { visible: boo
     if (!element) return;
     // Reduced motion and a hidden page settle immediately. Focus may defer a
     // collapse that will actually play; it must not pin a reduced-motion rewind.
+    // Move it to a surviving turn or the reading column first, or the browser
+    // drops it on the document when this subtree unmounts.
     if (!enabled || document.hidden) {
       animation.current?.cancel(); animation.current = null;
+      focusSurvivesRetire(element);
       setPresent(false); retired.current?.(); return;
     }
     if (element.contains(document.activeElement)) { setFocusHeld(true); return; }
@@ -240,9 +243,10 @@ export function RetiringContent({ visible, children, onRetired }: { visible: boo
  * collapse has settled — so the reader watches the rows fold away and the rows
  * below glide up into their place.
  *
- * Slots keep their previous index, so a collapsing turn stays exactly where the
- * reader last saw it; appending it would jump it to the bottom for the length
- * of the animation. Retention is bounded by the animation itself: `onRetired`
+ * Live slots follow the incoming group order, so older history stays above the
+ * tail. A collapsing turn stays next to the live neighbour that preceded it;
+ * appending it would jump it to the bottom for the length of the animation.
+ * Retention is bounded by the animation itself: `onRetired`
  * drops the slot, so a departing turn lives for one collapse and no longer —
  * and a key that comes back later is re-added as a live slot.
  */
@@ -273,6 +277,52 @@ export function RetiringTurns<T extends { readonly key: string }>({ groups, rend
       ))}
     </>
   );
+}
+
+/** A turn that is still on screen, not one this commit is about to unmount. */
+function survivingTurn(node: Element): HTMLElement | null {
+  if (!(node instanceof HTMLElement) || node.dataset.readerRetiring === 'retiring') return null;
+  const turn = node.hasAttribute('data-reader-turn') ? node : node.querySelector<HTMLElement>('[data-reader-turn]');
+  if (turn === null) return null;
+  const retiring = turn.closest('[data-reader-retiring]');
+  if (retiring instanceof HTMLElement && retiring.dataset.readerRetiring === 'retiring') return null;
+  return turn;
+}
+
+/**
+ * Where focus goes when cut content is removed without an animation.
+ * Prefer the nearest turn that is still live. Otherwise the reading column
+ * (or the host scrollport) so focus does not fall through to the document.
+ */
+function retireFocusTarget(element: HTMLElement): HTMLElement | null {
+  const parent = element.parentElement;
+  if (parent) {
+    const siblings = [...parent.children];
+    const index = siblings.indexOf(element);
+    for (let cursor = index - 1; cursor >= 0; cursor--) {
+      const turn = survivingTurn(siblings[cursor]!);
+      if (turn) return turn;
+    }
+    for (let cursor = index + 1; cursor < siblings.length; cursor++) {
+      const turn = survivingTurn(siblings[cursor]!);
+      if (turn) return turn;
+    }
+  }
+  const column = element.closest<HTMLElement>('[data-chat-flow]');
+  if (column && !element.contains(column)) return column;
+  const scroll = element.closest<HTMLElement>('[data-conversation-scroll]');
+  if (scroll && !element.contains(scroll)) return scroll;
+  return null;
+}
+
+/** Move focus out of `element` before it unmounts. A no-op when focus is elsewhere. */
+function focusSurvivesRetire(element: HTMLElement): void {
+  const active = document.activeElement;
+  if (active === null || !element.contains(active)) return;
+  const target = retireFocusTarget(element);
+  if (target === null || element.contains(target)) return;
+  if (target.tabIndex < 0) target.tabIndex = -1;
+  target.focus({ preventScroll: true });
 }
 
 // DOM-only behavior: the native Session remains the sole source of business data.
