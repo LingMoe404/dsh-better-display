@@ -10,6 +10,9 @@
   container-type: inline-size;
 }
 .column { max-width: var(--dsh-chat-content-width, 748px); width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+/* The column is only a programmatic focus-restore target (tabIndex -1), never a
+   Tab stop, so it must not draw a ring around the whole transcript. */
+.column:focus, .column:focus-visible { outline: none; }
 .toolbar { position: sticky; top: 0; display: flex; justify-content: flex-end; align-items: center; gap: 6px; min-height: 32px; padding: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; background: var(--dsw-alias-bg-base); backdrop-filter: blur(12px); }
 /* 吸顶带第二车道：左「正在处理」+ 右「自动折叠」共享同一条 40px 水平基线。
    top / z-index 由下方 measured-flow 段统一定义：这一道永远钉在工具栏车道

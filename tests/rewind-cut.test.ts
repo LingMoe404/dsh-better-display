@@ -866,6 +866,28 @@ test('the collapsing lane keeps the between-turns margin it dislodged', () => {
   assert.ok(css.includes('.retiringContent + .retiringContent > .turn { margin-top: 12px; }'));
 });
 
+test('the reading column restores focus without drawing a ring around the transcript', () => {
+  // The column is the last-resort focus target when a cut unmounts. In keyboard
+  // modality a programmatic focus matches :focus-visible, and the host painted
+  // the UA `auto 2px` outline around the whole column.
+  const reader = readFileSync(resolve(root, 'src/client/Reader.tsx'), 'utf8');
+  assert.match(reader, /className=\{css\.column\} data-chat-flow="" tabIndex=\{-1\}/);
+  const css = readFileSync(resolve(root, 'src/client/Reader.module.css'), 'utf8');
+  const rules = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(([, selector, body]) => ({
+    selectors: selector!.replace(/\/\*[\s\S]*?\*\//g, '').split(',').map(part => part.trim()),
+    body: body!,
+  }));
+  for (const pseudo of [':focus', ':focus-visible']) {
+    const rule = rules.find(({ selectors }) => selectors.includes(`.column${pseudo}`));
+    assert.ok(rule, `.column${pseudo} has its own rule`);
+    assert.match(rule.body, /outline:\s*none/);
+  }
+  // Only the column itself: descendants keep their own focus rings.
+  const suppressed = rules.filter(({ body }) => /outline:\s*none/.test(body)).flatMap(({ selectors }) => selectors);
+  assert.ok(suppressed.every(selector => !/^\.column[\s>+~]|\.column\s.*:focus/.test(selector)));
+  assert.match(css, /\.root button:focus-visible, \.root summary:focus-visible \{ outline: 2px solid/);
+});
+
 test('streaming, re-render, and reconnect do not withdraw rows', () => {
   const base = [message('user-1', 'user', 1), message('assistant-2', 'assistant-step', 2)];
   const streaming = chatOf(base);
