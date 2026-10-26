@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import {
   anchorSeqOf,
@@ -12,10 +12,11 @@ import {
   rewindTargetOfArgs,
   visibleChatKeys,
   visibleChatSignature,
-  type CutChatNode,
+  type CutChatNode
 } from '../src/client/rewind-cut.js';
+import { reconcileTurnSlots } from '../src/client/turn-slots.js';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 // Baseline first: the pure rule must go RED on the reported symptom before the
 // Reader is wired to it, and the wiring/bundle assertions stay RED until then.
@@ -25,17 +26,15 @@ function legacyVisibleKeys(chat: {
   order: readonly string[];
   nodes: { get(key: string): CutChatNode | undefined };
 }): readonly string[] {
-  return chat.order.filter(
-    (key) => chat.nodes.get(key)?.visibility !== "hidden",
-  );
+  return chat.order.filter(key => chat.nodes.get(key)?.visibility !== 'hidden');
 }
 
 function chatOf(nodes: readonly CutChatNode[]): {
   order: readonly string[];
   nodes: { get(key: string): CutChatNode | undefined };
 } {
-  const map = new Map(nodes.map((node) => [node.key, node]));
-  return { order: nodes.map((node) => node.key), nodes: map };
+  const map = new Map(nodes.map(node => [node.key, node]));
+  return { order: nodes.map(node => node.key), nodes: map };
 }
 
 /**
@@ -51,16 +50,16 @@ function rewindCommand(
   seq: number,
   args: string | null,
   marker: number | undefined,
-  outcomeKind = "success",
-  name = "rewind-plugin",
+  outcomeKind = 'success',
+  name = 'rewind-plugin'
 ): CutChatNode {
   return {
     key,
-    kind: "command",
+    kind: 'command',
     anchorSeq: seq,
-    visibility: "visible",
+    visibility: 'visible',
     data: {
-      kind: "command",
+      kind: 'command',
       seq,
       time: 1,
       commandId: key,
@@ -68,23 +67,23 @@ function rewindCommand(
       args,
       outcome: {
         kind: outcomeKind,
-        ...(marker === undefined ? {} : { sourceEventSeq: marker }),
-      },
-    },
+        ...(marker === undefined ? {} : { sourceEventSeq: marker })
+      }
+    }
   };
 }
 
 function message(
   key: string,
-  kind: "user" | "steering" | "assistant-step" | "tool-call" | "turn-tail",
-  seq: number,
+  kind: 'user' | 'steering' | 'assistant-step' | 'tool-call' | 'turn-tail',
+  seq: number
 ): CutChatNode {
   return {
     key,
     kind,
     anchorSeq: seq,
-    visibility: "visible",
-    data: { seq, time: 1, content: [] },
+    visibility: 'visible',
+    data: { seq, time: 1, content: [] }
   };
 }
 
@@ -95,87 +94,83 @@ function message(
  */
 function rewoundSession() {
   return chatOf([
-    message("user-1", "user", 1),
-    message("assistant-2", "assistant-step", 2),
-    message("tool-3", "tool-call", 3),
-    rewindCommand("command-5", 5, "@1 chat", 6),
-    message("turn-tail-4", "turn-tail", 4),
+    message('user-1', 'user', 1),
+    message('assistant-2', 'assistant-step', 2),
+    message('tool-3', 'tool-call', 3),
+    rewindCommand('command-5', 5, '@1 chat', 6),
+    message('turn-tail-4', 'turn-tail', 4)
   ]);
 }
 
-test("a rewind withdraws the target and every row after it, command row included", () => {
+test('a rewind withdraws the target and every row after it, command row included', () => {
   const chat = rewoundSession();
   const visible = visibleChatKeys(chat);
   assert.deepEqual(visible, []);
   assert.deepEqual(rewindCutSpans(chat), [{ start: 1, end: 6 }]);
   for (const seq of [1, 2, 3, 4, 5])
-    assert.equal(
-      hiddenRewindSeqs(chat).has(seq),
-      true,
-      `seq ${seq} must be withdrawn`,
-    );
+    assert.equal(hiddenRewindSeqs(chat).has(seq), true, `seq ${seq} must be withdrawn`);
 });
 
-test("the pre-fix visibility rule reproduces the reported defect", () => {
+test('the pre-fix visibility rule reproduces the reported defect', () => {
   // Regression evidence for the fix, not a wish: with only the host's hidden
   // flag honoured, the withdrawn answer, tool row and `/rewind` command row all
   // survived — the exact symptom reported (the command is recorded, no rollback).
   const chat = rewoundSession();
   assert.deepEqual(legacyVisibleKeys(chat), [
-    "user-1",
-    "assistant-2",
-    "tool-3",
-    "command-5",
-    "turn-tail-4",
+    'user-1',
+    'assistant-2',
+    'tool-3',
+    'command-5',
+    'turn-tail-4'
   ]);
   assert.notDeepEqual(legacyVisibleKeys(chat), visibleChatKeys(chat));
 });
 
-test("a row before the target is never withdrawn", () => {
+test('a row before the target is never withdrawn', () => {
   const chat = chatOf([
-    message("user-0", "user", 1),
-    message("user-1", "user", 2),
-    message("assistant-2", "assistant-step", 3),
-    rewindCommand("command-4", 4, "@2 chat", 5),
+    message('user-0', 'user', 1),
+    message('user-1', 'user', 2),
+    message('assistant-2', 'assistant-step', 3),
+    rewindCommand('command-4', 4, '@2 chat', 5)
   ]);
-  assert.deepEqual(visibleChatKeys(chat), ["user-0"]);
+  assert.deepEqual(visibleChatKeys(chat), ['user-0']);
 });
 
-test("only a successful, marker-carrying rewind cuts; failures and previews stay readable", () => {
+test('only a successful, marker-carrying rewind cuts; failures and previews stay readable', () => {
   const failed = chatOf([
-    message("user-1", "user", 1),
-    rewindCommand("command-2", 2, "@1 chat", undefined, "error"),
+    message('user-1', 'user', 1),
+    rewindCommand('command-2', 2, '@1 chat', undefined, 'error')
   ]);
   assert.deepEqual(rewindCutSpans(failed), []);
-  assert.deepEqual(visibleChatKeys(failed), ["user-1", "command-2"]);
+  assert.deepEqual(visibleChatKeys(failed), ['user-1', 'command-2']);
 
   // A success without the marker seq (older host output) must not cut a guessed range.
   const markerless = chatOf([
-    message("user-1", "user", 1),
-    rewindCommand("command-2", 2, "@1 chat", undefined),
+    message('user-1', 'user', 1),
+    rewindCommand('command-2', 2, '@1 chat', undefined)
   ]);
   assert.deepEqual(rewindCutSpans(markerless), []);
-  assert.deepEqual(visibleChatKeys(markerless), ["user-1", "command-2"]);
+  assert.deepEqual(visibleChatKeys(markerless), ['user-1', 'command-2']);
 });
 
-test("preview and candidate probe rows never surface in the transcript", () => {
+test('preview and candidate probe rows never surface in the transcript', () => {
   const chat = chatOf([
-    message("user-1", "user", 1),
-    rewindCommand("preview-2", 2, "preview @1 both", undefined),
-    rewindCommand("candidates-3", 3, "__candidates", undefined),
+    message('user-1', 'user', 1),
+    rewindCommand('preview-2', 2, 'preview @1 both', undefined),
+    rewindCommand('candidates-3', 3, '__candidates', undefined)
   ]);
-  assert.deepEqual(visibleChatKeys(chat), ["user-1"]);
+  assert.deepEqual(visibleChatKeys(chat), ['user-1']);
 });
 
-test("separate rewinds keep separate spans so later traffic is not swallowed", () => {
+test('separate rewinds keep separate spans so later traffic is not swallowed', () => {
   // rewind#1 cut [1, 4]; new user@5 survives; rewind#2 cut [5, 8].
   const spans = coalesceCutSpans([
     { start: 1, end: 4 },
-    { start: 5, end: 8 },
+    { start: 5, end: 8 }
   ]);
   assert.deepEqual(spans, [
     { start: 1, end: 4 },
-    { start: 5, end: 8 },
+    { start: 5, end: 8 }
   ]);
   assert.equal(cutContains(spans, 4), true);
   assert.equal(cutContains(spans, 5), true);
@@ -183,31 +178,31 @@ test("separate rewinds keep separate spans so later traffic is not swallowed", (
   assert.deepEqual(
     coalesceCutSpans([
       { start: 1, end: 4 },
-      { start: 7, end: 9 },
+      { start: 7, end: 9 }
     ]),
     [
       { start: 1, end: 4 },
-      { start: 7, end: 9 },
-    ],
+      { start: 7, end: 9 }
+    ]
   );
   assert.equal(
     cutContains(
       coalesceCutSpans([
         { start: 1, end: 4 },
-        { start: 7, end: 9 },
+        { start: 7, end: 9 }
       ]),
-      5,
+      5
     ),
-    false,
+    false
   );
-  // The top of a cut reaches the next integer, because the host anchors
-  // synthetic rows at fractional offsets off a real seq (`turn-tail` at
-  // `seq + 0.1`), but it must NOT reach the next span's start.
+  // The cut stops at the marker. 4.1 is past end 4; the next turn's process
+  // row lives in that gap (`startSeq - 0.1`).
   const gapped = coalesceCutSpans([
     { start: 1, end: 4 },
-    { start: 7, end: 9 },
+    { start: 7, end: 9 }
   ]);
-  assert.equal(cutContains(gapped, 4.1), true);
+  assert.equal(cutContains(gapped, 4), true);
+  assert.equal(cutContains(gapped, 4.1), false);
   assert.equal(cutContains(gapped, 5.0), false);
   assert.equal(cutContains(gapped, 6.9), false);
   assert.equal(cutContains(gapped, 7.0), true);
@@ -215,93 +210,83 @@ test("separate rewinds keep separate spans so later traffic is not swallowed", (
   assert.deepEqual(
     coalesceCutSpans([
       { start: 1, end: 6 },
-      { start: 4, end: 9 },
+      { start: 4, end: 9 }
     ]),
-    [{ start: 1, end: 9 }],
+    [{ start: 1, end: 9 }]
   );
 });
 
-test("malformed command payloads are skipped instead of throwing", () => {
+test('malformed command payloads are skipped instead of throwing', () => {
   const chat = chatOf([
-    { key: "broken", kind: "command", anchorSeq: 1, data: "not an object" },
+    { key: 'broken', kind: 'command', anchorSeq: 1, data: 'not an object' },
     {
-      key: "no-name",
-      kind: "command",
+      key: 'no-name',
+      kind: 'command',
       anchorSeq: 2,
       data: {
-        args: "@1 chat",
-        outcome: { kind: "success", sourceEventSeq: 3 },
-      },
+        args: '@1 chat',
+        outcome: { kind: 'success', sourceEventSeq: 3 }
+      }
     },
     {
-      key: "bad-marker",
-      kind: "command",
+      key: 'bad-marker',
+      kind: 'command',
       anchorSeq: 3,
       data: {
-        name: "rewind-plugin",
-        args: "@1 chat",
-        outcome: { kind: "success", sourceEventSeq: "x" },
-      },
+        name: 'rewind-plugin',
+        args: '@1 chat',
+        outcome: { kind: 'success', sourceEventSeq: 'x' }
+      }
     },
     {
-      key: "bad-args",
-      kind: "command",
+      key: 'bad-args',
+      kind: 'command',
       anchorSeq: 4,
       data: {
-        name: "rewind",
+        name: 'rewind',
         args: null,
-        outcome: { kind: "success", sourceEventSeq: 9 },
-      },
+        outcome: { kind: 'success', sourceEventSeq: 9 }
+      }
     },
-    message("user-1", "user", 1),
+    message('user-1', 'user', 1)
   ]);
   assert.deepEqual(rewindCutSpans(chat), []);
-  assert.deepEqual(visibleChatKeys(chat), [
-    "broken",
-    "no-name",
-    "bad-marker",
-    "bad-args",
-    "user-1",
-  ]);
+  // bad-args succeeded and carries a marker, so the command row itself leaves
+  // (same as the plugin). It still opens no span: user-1 stays.
+  assert.deepEqual(visibleChatKeys(chat), ['broken', 'no-name', 'bad-marker', 'user-1']);
 });
 
-test("anchorSeq falls back to the payload seq and target parsing is locale-independent", () => {
-  assert.equal(anchorSeqOf({ key: "k", kind: "user", data: { seq: 7 } }), 7);
-  assert.equal(anchorSeqOf({ key: "k", anchorSeq: 9, data: { seq: 7 } }), 9);
-  assert.equal(anchorSeqOf({ key: "k", anchorSeq: -1, data: {} }), undefined);
-  assert.equal(rewindTargetOfArgs("@12 chat"), 12);
-  assert.equal(rewindTargetOfArgs("preview @3 both"), 3);
-  assert.equal(rewindTargetOfArgs("chat"), undefined);
+test('anchorSeq falls back to the payload seq and target parsing is locale-independent', () => {
+  assert.equal(anchorSeqOf({ key: 'k', kind: 'user', data: { seq: 7 } }), 7);
+  assert.equal(anchorSeqOf({ key: 'k', anchorSeq: 9, data: { seq: 7 } }), 9);
+  assert.equal(anchorSeqOf({ key: 'k', anchorSeq: -1, data: {} }), undefined);
+  assert.equal(rewindTargetOfArgs('@12 chat'), 12);
+  assert.equal(rewindTargetOfArgs('preview @3 both'), 3);
+  assert.equal(rewindTargetOfArgs('chat'), undefined);
   assert.equal(rewindTargetOfArgs(undefined), undefined);
 });
 
-test("an unfiltered snapshot keeps its original order reference", () => {
-  const chat = chatOf([
-    message("user-1", "user", 1),
-    message("assistant-2", "assistant-step", 2),
-  ]);
+test('an unfiltered snapshot keeps its original order reference', () => {
+  const chat = chatOf([message('user-1', 'user', 1), message('assistant-2', 'assistant-step', 2)]);
   assert.equal(visibleChatKeys(chat), chat.order);
 });
 
-test("the Reader renders from the rewind cut instead of the raw snapshot order", () => {
+test('the Reader renders from the rewind cut instead of the raw snapshot order', () => {
   // The seam that was missing: the pure rule above is useless unless the Reader
   // actually filters its rows with it. Pin the wiring so a refactor cannot drop
   // it and silently restore the reported defect.
-  const source = readFileSync(resolve(root, "src/client/Reader.tsx"), "utf8");
+  const source = readFileSync(resolve(root, 'src/client/Reader.tsx'), 'utf8');
   assert.match(source, /visibleChatKeys/);
   // Quote-agnostic: the source is formatted by the project's own toolchain, so a
   // double-quoted import is still the same wiring.
-  assert.ok(
-    source.includes("from './rewind-cut.js'") ||
-      source.includes('from "./rewind-cut.js"'),
-  );
+  assert.ok(source.includes("from './rewind-cut.js'") || source.includes('from "./rewind-cut.js"'));
 });
 
-test("the Reader no longer drives its groups and waiting clock from the raw order", () => {
+test('the Reader no longer drives its groups and waiting clock from the raw order', () => {
   // The raw snapshot order still feeds the pending-submission de-dup (a withdrawn
   // message is still *durable*, so its echo must not reappear as a local one),
   // but every render-facing consumer reads the filtered key list.
-  const source = readFileSync(resolve(root, "src/client/Reader.tsx"), "utf8");
+  const source = readFileSync(resolve(root, 'src/client/Reader.tsx'), 'utf8');
   assert.match(source, /groupNodes\(\s*renderKeys,/);
   // The call may be formatted across lines, so match the argument rather than
   // the argument-plus-comma.
@@ -311,47 +296,49 @@ test("the Reader no longer drives its groups and waiting clock from the raw orde
   assert.match(source, /observedInputIds\(order,/);
 });
 
-test("the committed client bundle carries the rewind cut", () => {
-  const client = readFileSync(resolve(root, "lib/client.js"), "utf8");
-  assert.match(client, /hiddenRewindSeqs|visibleChatKeys/);
-  assert.match(client, /visibleChatSignature/);
+test('the client entry the bundle is built from still mounts the rewind cut', () => {
+  // lib/ is rebuilt at integration, so this pins the source the bundler reads
+  // rather than a stale prebuilt client.js.
+  const index = readFileSync(resolve(root, 'src/client/index.tsx'), 'utf8');
+  assert.match(index, /from ['"]\.\/Reader\.js['"]/);
+  const reader = readFileSync(resolve(root, 'src/client/Reader.tsx'), 'utf8');
+  assert.match(reader, /visibleChatKeys/);
+  assert.match(reader, /visibleChatSignature/);
+  assert.match(reader, /chatSeatProps\(/);
 });
 
-test("the Reader subscribes to the visible set instead of reference-stable snapshot fields", () => {
+test('the Reader subscribes to the visible set instead of reference-stable snapshot fields', () => {
   // The subscription seam: a rewind upserts an EXISTING command row in place, so
   // `snapshot.order` and `snapshot.nodes` keep their identity and a selector on
   // either never fires. The Reader must depend on the value-compared signature.
-  const source = readFileSync(resolve(root, "src/client/Reader.tsx"), "utf8");
+  const source = readFileSync(resolve(root, 'src/client/Reader.tsx'), 'utf8');
   // Matched across formatting: the formatter breaks the arrow onto its own line.
   assert.match(source, /useChat\([\s\S]{0,40}?visibleChatSignature\(snapshot\)/);
-  assert.ok(source.includes("[order, nodes, rewindSignature]"));
+  assert.ok(source.includes('[order, nodes, rewindSignature]'));
 });
 
-test("a string signature is stable enough for an Object.is-compared selector", () => {
-  const chat = chatOf([message("user-1", "user", 1)]);
-  assert.equal(typeof visibleChatSignature(chat), "string");
+test('a string signature is stable enough for an Object.is-compared selector', () => {
+  const chat = chatOf([message('user-1', 'user', 1)]);
+  assert.equal(typeof visibleChatSignature(chat), 'string');
   assert.equal(visibleChatSignature(chat), visibleChatSignature(chat));
-  assert.equal(visibleChatSignature(chat), "user-1");
+  assert.equal(visibleChatSignature(chat), 'user-1');
 });
 
-test("the signature flips the moment the rewind marker lands", () => {
+test('the signature flips the moment the rewind marker lands', () => {
   // Before the marker the command row is an ordinary record; after it, the cut
   // exists and the same row must be gone. Nothing about the row's KEY changes,
   // which is exactly why the memo needed a value signal rather than an identity.
   const before = chatOf([
-    message("user-1", "user", 1),
-    rewindCommand("command-2", 2, "@1 chat", undefined),
+    message('user-1', 'user', 1),
+    rewindCommand('command-2', 2, '@1 chat', undefined)
   ]);
-  const after = chatOf([
-    message("user-1", "user", 1),
-    rewindCommand("command-2", 2, "@1 chat", 3),
-  ]);
-  assert.equal(visibleChatSignature(before), "user-1" + "\u0000" + "command-2");
-  assert.equal(visibleChatSignature(after), "");
+  const after = chatOf([message('user-1', 'user', 1), rewindCommand('command-2', 2, '@1 chat', 3)]);
+  assert.equal(visibleChatSignature(before), 'user-1' + '\u0000' + 'command-2');
+  assert.equal(visibleChatSignature(after), '');
   assert.notEqual(visibleChatSignature(before), visibleChatSignature(after));
 });
 
-test("a withdrawn turn retires its own synthetic rows, which the host anchors before the cut", () => {
+test('a withdrawn turn retires its own synthetic rows, which the host anchors before the cut', () => {
   // Measured live on the host (session 92667917, turn 1): the turn opens at 5,
   // its user message lands at 9, and its process row is anchored at
   // `controlAnchorSeq - 0.1` = 4.9 — BELOW the rewind target. Containment alone
@@ -361,102 +348,102 @@ test("a withdrawn turn retires its own synthetic rows, which the host anchors be
     turn: 1,
     start: { seq: 5 },
     end: { seq: 18 },
-    status: "closed",
+    status: 'closed'
   };
   const chat = chatOf([
     {
-      key: "input-message",
-      kind: "user",
+      key: 'input-message',
+      kind: 'user',
       anchorSeq: 9,
-      visibility: "visible",
-      location: { kind: "step", turn, step: 1 },
-      data: { seq: 9 },
+      visibility: 'visible',
+      location: { kind: 'step', turn, step: 1 },
+      data: { seq: 9 }
     },
     {
-      key: "turn-process1",
-      kind: "turn-process",
+      key: 'turn-process1',
+      kind: 'turn-process',
       anchorSeq: 4.9,
-      visibility: "visible",
-      location: { kind: "turn", turn },
-      data: { controlAnchorSeq: 5, processStartSeq: 5 },
+      visibility: 'visible',
+      location: { kind: 'turn', turn },
+      data: { controlAnchorSeq: 5, processStartSeq: 5 }
     },
     {
-      key: "turn-tail1",
-      kind: "turn-tail",
+      key: 'turn-tail1',
+      kind: 'turn-tail',
       anchorSeq: 18.1,
-      visibility: "visible",
-      location: { kind: "turn", turn },
-      data: { turn: 1, seq: 18 },
+      visibility: 'visible',
+      location: { kind: 'turn', turn },
+      data: { turn: 1, seq: 18 }
     },
     {
-      key: "preview",
-      kind: "command",
+      key: 'preview',
+      kind: 'command',
       anchorSeq: 20,
-      visibility: "visible",
-      location: { kind: "session" },
+      visibility: 'visible',
+      location: { kind: 'session' },
       data: {
-        kind: "command",
+        kind: 'command',
         seq: 20,
-        name: "rewind-plugin",
-        args: " preview @9 both",
-        outcome: { kind: "success" },
-      },
+        name: 'rewind-plugin',
+        args: ' preview @9 both',
+        outcome: { kind: 'success' }
+      }
     },
     {
-      key: "executed",
-      kind: "command",
+      key: 'executed',
+      kind: 'command',
       anchorSeq: 22,
-      visibility: "visible",
-      location: { kind: "session" },
+      visibility: 'visible',
+      location: { kind: 'session' },
       data: {
-        kind: "command",
+        kind: 'command',
         seq: 22,
-        name: "rewind-plugin",
-        args: " @9 chat",
-        outcome: { kind: "success", sourceEventSeq: 23 },
-      },
-    },
+        name: 'rewind-plugin',
+        args: ' @9 chat',
+        outcome: { kind: 'success', sourceEventSeq: 23 }
+      }
+    }
   ]);
   assert.deepEqual(rewindCutSpans(chat), [{ start: 9, end: 23 }]);
   assert.deepEqual(visibleChatKeys(chat), []);
-  assert.equal(visibleChatSignature(chat), "");
+  assert.equal(visibleChatSignature(chat), '');
 });
 
-test("a later turn keeps its rows even though it shares the withdrawn turn number", () => {
+test('a later turn keeps its rows even though it shares the withdrawn turn number', () => {
   // Guard against over-reach: the turn rule reads a turn IDENTITY, and a row of
   // a different turn must survive no matter where it sits relative to the cut.
   const withdrawnTurn = {
     turn: 1,
     start: { seq: 5 },
     end: { seq: 18 },
-    status: "closed",
+    status: 'closed'
   };
   const openTurn = {
     turn: 2,
     start: { seq: 30 },
     end: { seq: 40 },
-    status: "closed",
+    status: 'closed'
   };
   const chat = chatOf([
     {
-      key: "user-1",
-      kind: "user",
+      key: 'user-1',
+      kind: 'user',
       anchorSeq: 9,
-      visibility: "visible",
-      location: { kind: "step", turn: withdrawnTurn, step: 1 },
-      data: { seq: 9 },
+      visibility: 'visible',
+      location: { kind: 'step', turn: withdrawnTurn, step: 1 },
+      data: { seq: 9 }
     },
     {
-      key: "process-2",
-      kind: "turn-process",
+      key: 'process-2',
+      kind: 'turn-process',
       anchorSeq: 29.9,
-      visibility: "visible",
-      location: { kind: "turn", turn: openTurn },
-      data: { controlAnchorSeq: 30 },
+      visibility: 'visible',
+      location: { kind: 'turn', turn: openTurn },
+      data: { controlAnchorSeq: 30 }
     },
-    rewindCommand("command-22", 22, " @9 chat", 23),
+    rewindCommand('command-22', 22, ' @9 chat', 23)
   ]);
-  assert.deepEqual(visibleChatKeys(chat), ["process-2"]);
+  assert.deepEqual(visibleChatKeys(chat), ['process-2']);
 });
 
 /**
@@ -486,12 +473,12 @@ interface RealEventData {
 }
 
 interface RealEvent {
-  readonly type: "command/run" | "command/done" | "user/message";
+  readonly type: 'command/run' | 'command/done' | 'user/message';
   readonly seq: number;
   readonly time: number;
   readonly data: RealEventData;
   readonly surfaceOp?:
-    | "append"
+    | 'append'
     | {
         readonly op: string;
         readonly startSeq: number;
@@ -502,133 +489,133 @@ interface RealEvent {
 
 const REAL_REWIND_EVENTS: readonly RealEvent[] = [
   {
-    type: "command/run",
+    type: 'command/run',
     seq: 821,
     time: 1791938178593,
     data: {
-      commandId: "cmd-8c119757-12",
-      name: "rewind",
-      args: " preview @802 both",
-      source: { kind: "user" },
-    },
+      commandId: 'cmd-8c119757-12',
+      name: 'rewind',
+      args: ' preview @802 both',
+      source: { kind: 'user' }
+    }
   },
   {
-    type: "command/done",
+    type: 'command/done',
     seq: 822,
     time: 1791938178678,
     data: {
-      commandId: "cmd-8c119757-12",
-      kind: "success",
-      text: "Rewind to seq 802, removing 2 node(s) from the model context (conversation log kept).\nNo restorable changes after the target.\nimpact=0",
-    },
+      commandId: 'cmd-8c119757-12',
+      kind: 'success',
+      text: 'Rewind to seq 802, removing 2 node(s) from the model context (conversation log kept).\nNo restorable changes after the target.\nimpact=0'
+    }
   },
   {
-    type: "command/run",
+    type: 'command/run',
     seq: 823,
     time: 1791938179674,
     data: {
-      commandId: "cmd-8c119757-13",
-      name: "rewind",
-      args: " @802 chat",
-      source: { kind: "user" },
-    },
+      commandId: 'cmd-8c119757-13',
+      name: 'rewind',
+      args: ' @802 chat',
+      source: { kind: 'user' }
+    }
   },
   {
-    type: "user/message",
+    type: 'user/message',
     seq: 824,
     time: 1791938179739,
     data: {
-      content: [{ type: "text", text: "(empty message)" }],
-      source: { kind: "dsh-rewind" },
-      role: "user",
-      id: "6b05f62f-f478-45fb-8cb8-50dcda7759b7",
+      content: [{ type: 'text', text: '(empty message)' }],
+      source: { kind: 'dsh-rewind' },
+      role: 'user',
+      id: '6b05f62f-f478-45fb-8cb8-50dcda7759b7'
     },
     sourceEventSeqs: [802, 803],
-    surfaceOp: { op: "replace", startSeq: 802, endSeq: 803 },
+    surfaceOp: { op: 'replace', startSeq: 802, endSeq: 803 }
   },
   {
-    type: "command/done",
+    type: 'command/done',
     seq: 825,
     time: 1791938179740,
     data: {
-      commandId: "cmd-8c119757-13",
-      kind: "success",
-      text: "Withdrawn seq 802 and everything after it (conversation returned to earlier).",
-      sourceEventSeq: 824,
-    },
+      commandId: 'cmd-8c119757-13',
+      kind: 'success',
+      text: 'Withdrawn seq 802 and everything after it (conversation returned to earlier).',
+      sourceEventSeq: 824
+    }
   },
   {
-    type: "user/message",
+    type: 'user/message',
     seq: 830,
     time: 1791938231664,
     data: {
-      content: [{ type: "text", text: "继续" }],
+      content: [{ type: 'text', text: '继续' }],
       source: {
-        kind: "user",
-        rpcId: "9a813c7f-1613-405b-a37e-57b25086b3ec",
-        clientTimeZone: "Asia/Shanghai",
+        kind: 'user',
+        rpcId: '9a813c7f-1613-405b-a37e-57b25086b3ec',
+        clientTimeZone: 'Asia/Shanghai'
       },
-      role: "user",
-      id: "2c5e83ac-55cf-4a84-9daa-f25af2546614",
+      role: 'user',
+      id: '2c5e83ac-55cf-4a84-9daa-f25af2546614'
     },
-    surfaceOp: "append",
+    surfaceOp: 'append'
   },
   {
-    type: "command/run",
+    type: 'command/run',
     seq: 850,
     time: 1791938272620,
     data: {
-      commandId: "cmd-8c119757-18",
-      name: "rewind",
-      args: " preview @830 both",
-      source: { kind: "user" },
-    },
+      commandId: 'cmd-8c119757-18',
+      name: 'rewind',
+      args: ' preview @830 both',
+      source: { kind: 'user' }
+    }
   },
   {
-    type: "command/done",
+    type: 'command/done',
     seq: 851,
     time: 1791938272691,
     data: {
-      commandId: "cmd-8c119757-18",
-      kind: "success",
-      text: "Rewind to seq 830, removing 1 node(s) from the model context (conversation log kept).\nNo restorable changes after the target.\nimpact=0",
-    },
+      commandId: 'cmd-8c119757-18',
+      kind: 'success',
+      text: 'Rewind to seq 830, removing 1 node(s) from the model context (conversation log kept).\nNo restorable changes after the target.\nimpact=0'
+    }
   },
   {
-    type: "command/run",
+    type: 'command/run',
     seq: 852,
     time: 1791938273661,
     data: {
-      commandId: "cmd-8c119757-19",
-      name: "rewind",
-      args: " @830 chat",
-      source: { kind: "user" },
-    },
+      commandId: 'cmd-8c119757-19',
+      name: 'rewind',
+      args: ' @830 chat',
+      source: { kind: 'user' }
+    }
   },
   {
-    type: "user/message",
+    type: 'user/message',
     seq: 853,
     time: 1791938273719,
     data: {
-      content: [{ type: "text", text: "(empty message)" }],
-      source: { kind: "dsh-rewind" },
-      role: "user",
-      id: "2ce7c1c6-0c54-451c-864c-7026fd5bb92d",
+      content: [{ type: 'text', text: '(empty message)' }],
+      source: { kind: 'dsh-rewind' },
+      role: 'user',
+      id: '2ce7c1c6-0c54-451c-864c-7026fd5bb92d'
     },
     sourceEventSeqs: [830],
-    surfaceOp: { op: "replace", startSeq: 830, endSeq: 830 },
+    surfaceOp: { op: 'replace', startSeq: 830, endSeq: 830 }
   },
   {
-    type: "command/done",
+    type: 'command/done',
     seq: 854,
     time: 1791938273720,
     data: {
-      commandId: "cmd-8c119757-19",
-      kind: "success",
-      text: "Withdrawn seq 830 and everything after it (conversation returned to earlier).",
-      sourceEventSeq: 853,
-    },
-  },
+      commandId: 'cmd-8c119757-19',
+      kind: 'success',
+      text: 'Withdrawn seq 830 and everything after it (conversation returned to earlier).',
+      sourceEventSeq: 853
+    }
+  }
 ] as const;
 
 /** Project the real records the way the host's command definition does. */
@@ -644,42 +631,41 @@ function chatFromRealEvents(events: typeof REAL_REWIND_EVENTS): {
   for (const event of events) {
     const commandId = event.data.commandId;
     if (commandId === undefined) continue;
-    if (event.type === "command/run") {
+    if (event.type === 'command/run') {
       started.set(commandId, {
         seq: event.seq,
         time: event.time,
-        name: event.data.name ?? "",
-        args: event.data.args ?? null,
+        name: event.data.name ?? '',
+        args: event.data.args ?? null
       });
       nodes.push({
         key: `command:${commandId}`,
-        kind: "command",
+        kind: 'command',
         anchorSeq: event.seq,
-        visibility: "visible",
+        visibility: 'visible',
         data: {
-          kind: "command",
+          kind: 'command',
           seq: event.seq,
           time: event.time,
           commandId,
           name: event.data.name,
           args: event.data.args ?? null,
-          outcome: null,
-        },
+          outcome: null
+        }
       });
       continue;
     }
-    if (event.type === "command/done") {
+    if (event.type === 'command/done') {
       // `commandFromDone` keeps the RUN seq as the node's seq/anchorSeq.
       const previous = started.get(commandId);
-      const marker =
-        "sourceEventSeq" in event.data ? event.data.sourceEventSeq : undefined;
+      const marker = 'sourceEventSeq' in event.data ? event.data.sourceEventSeq : undefined;
       nodes.push({
         key: `command:${commandId}`,
-        kind: "command",
+        kind: 'command',
         anchorSeq: previous?.seq ?? event.seq,
-        visibility: "visible",
+        visibility: 'visible',
         data: {
-          kind: "command",
+          kind: 'command',
           seq: previous?.seq ?? event.seq,
           time: previous?.time ?? event.time,
           commandId,
@@ -687,33 +673,33 @@ function chatFromRealEvents(events: typeof REAL_REWIND_EVENTS): {
           args: previous?.args ?? null,
           outcome: {
             kind: event.data.kind,
-            ...(marker === undefined ? {} : { sourceEventSeq: marker }),
-          },
-        },
+            ...(marker === undefined ? {} : { sourceEventSeq: marker })
+          }
+        }
       });
       continue;
     }
     // Only an append surface event materialises as a chat node; the replace marker does not.
-    if (event.surfaceOp === "append") {
+    if (event.surfaceOp === 'append') {
       nodes.push({
         key: `user:${event.seq}`,
-        kind: "user",
+        kind: 'user',
         anchorSeq: event.seq,
-        visibility: "visible",
-        data: { seq: event.seq, time: event.time, content: event.data.content },
+        visibility: 'visible',
+        data: { seq: event.seq, time: event.time, content: event.data.content }
       });
     }
   }
   return chatOf(nodes);
 }
 
-test("the genuine host records from a real session produce the expected two cuts", () => {
+test('the genuine host records from a real session produce the expected two cuts', () => {
   const chat = chatFromRealEvents(REAL_REWIND_EVENTS);
   // rewind#1 withdrew 802; the later user message at 830 survived it; rewind#2
   // then withdrew 830 itself.
   assert.deepEqual(rewindCutSpans(chat), [
     { start: 802, end: 824 },
-    { start: 830, end: 853 },
+    { start: 830, end: 853 }
   ]);
   // Every row in this window is inside one of the two cuts.
   assert.deepEqual(visibleChatKeys(chat), []);
@@ -722,14 +708,14 @@ test("the genuine host records from a real session produce the expected two cuts
   // (822, 851) are not cut sources either.
   const previewOnly = chatFromRealEvents(
     REAL_REWIND_EVENTS.filter(
-      (event) =>
+      event =>
         event.seq !== 823 &&
         event.seq !== 824 &&
         event.seq !== 825 &&
         event.seq !== 852 &&
         event.seq !== 853 &&
-        event.seq !== 854,
-    ) as typeof REAL_REWIND_EVENTS,
+        event.seq !== 854
+    ) as typeof REAL_REWIND_EVENTS
   );
   assert.deepEqual(rewindCutSpans(previewOnly), []);
   // The replace markers (824, 853) never materialise as chat nodes, but they are
@@ -748,41 +734,41 @@ test("the genuine host records from a real session produce the expected two cuts
  * projection publishes. Reading only the log spelling is the defect this test
  * pins: the cut silently computed to nothing on every real session.
  */
-test("the command name the live snapshot publishes (rewind-plugin) still cuts", () => {
+test('the command name the live snapshot publishes (rewind-plugin) still cuts', () => {
   const chat = chatOf([
-    message("user-1", "user", 1),
-    message("assistant-2", "assistant-step", 2),
-    rewindCommand("command-3", 3, " @1 chat", 4),
+    message('user-1', 'user', 1),
+    message('assistant-2', 'assistant-step', 2),
+    rewindCommand('command-3', 3, ' @1 chat', 4)
   ]);
   assert.equal(
-    (chat.nodes.get("command-3")?.data as { name?: string } | undefined)?.name,
-    "rewind-plugin",
+    (chat.nodes.get('command-3')?.data as { name?: string } | undefined)?.name,
+    'rewind-plugin'
   );
   assert.deepEqual(rewindCutSpans(chat), [{ start: 1, end: 4 }]);
   assert.deepEqual(visibleChatKeys(chat), []);
   // The candidate probe and the impact preview carry the same engine name.
   const probes = chatOf([
-    message("user-1", "user", 1),
-    rewindCommand("preview-2", 2, " preview @1 both", undefined, "success"),
-    rewindCommand("candidates-3", 3, "__candidates", undefined, "success"),
+    message('user-1', 'user', 1),
+    rewindCommand('preview-2', 2, ' preview @1 both', undefined, 'success'),
+    rewindCommand('candidates-3', 3, '__candidates', undefined, 'success')
   ]);
-  assert.deepEqual(visibleChatKeys(probes), ["user-1"]);
+  assert.deepEqual(visibleChatKeys(probes), ['user-1']);
 });
 
-test("the pre-fix name predicate reproduces the reported defect", () => {
+test('the pre-fix name predicate reproduces the reported defect', () => {
   // Regression evidence, not a wish: matching only the log spelling
   // (`name === 'rewind'`) finds no cut source in a live snapshot, so every
   // withdrawn row survives and the command is merely recorded.
   const chat = chatOf([
-    message("user-1", "user", 1),
-    message("assistant-2", "assistant-step", 2),
-    rewindCommand("command-3", 3, " @1 chat", 4),
+    message('user-1', 'user', 1),
+    message('assistant-2', 'assistant-step', 2),
+    rewindCommand('command-3', 3, ' @1 chat', 4)
   ]);
   const legacyCutSpans = (c: {
     order: readonly string[];
     nodes: { get(key: string): CutChatNode | undefined };
   }) =>
-    c.order.flatMap((key) => {
+    c.order.flatMap(key => {
       const node = c.nodes.get(key);
       const data = node?.data as
         | {
@@ -791,11 +777,10 @@ test("the pre-fix name predicate reproduces the reported defect", () => {
             outcome?: { kind?: string; sourceEventSeq?: number };
           }
         | undefined;
-      if (node?.kind !== "command" || data?.name !== "rewind") return [];
-      if (data.outcome?.kind !== "success") return [];
+      if (node?.kind !== 'command' || data?.name !== 'rewind') return [];
+      if (data.outcome?.kind !== 'success') return [];
       const marker = data.outcome.sourceEventSeq;
-      const match =
-        typeof data.args === "string" ? data.args.match(/@(\d+)/) : null;
+      const match = typeof data.args === 'string' ? data.args.match(/@(\d+)/) : null;
       return marker === undefined || match === null
         ? []
         : [{ start: Number(match[1]), end: marker }];
@@ -804,7 +789,7 @@ test("the pre-fix name predicate reproduces the reported defect", () => {
   assert.notDeepEqual(legacyCutSpans(chat), rewindCutSpans(chat));
 });
 
-test("fractional synthetic anchors inside a cut are withdrawn", () => {
+test('fractional synthetic anchors inside a cut are withdrawn', () => {
   // The live snapshot anchors the turn's process disclosure at
   // `controlAnchorSeq - 0.1` and the turn tail at `seq + 0.1`
   // (`CHAT_SYNTHETIC_SEQ_OFFSETS`). An integer-only comparison lets the last
@@ -812,48 +797,42 @@ test("fractional synthetic anchors inside a cut are withdrawn", () => {
   // the smoke test showed: the user bubble and every tool row vanished, and one
   // lone process cell stayed behind.
   const chat = chatOf([
-    message("user-1", "user", 1),
+    message('user-1', 'user', 1),
     {
-      key: "process-9",
-      kind: "turn-process",
+      key: 'process-9',
+      kind: 'turn-process',
       anchorSeq: 9.9,
-      visibility: "visible",
-      data: { turn: 1, controlAnchorSeq: 10 },
+      visibility: 'visible',
+      data: { turn: 1, controlAnchorSeq: 10 }
     },
-    message("assistant-10", "assistant-step", 10),
-    rewindCommand("command-11", 11, " @1 chat", 12),
+    message('assistant-10', 'assistant-step', 10),
+    rewindCommand('command-11', 11, ' @1 chat', 12)
   ]);
   assert.deepEqual(rewindCutSpans(chat), [{ start: 1, end: 12 }]);
   assert.equal(cutContains(rewindCutSpans(chat), 9.9), true);
   assert.deepEqual(visibleChatKeys(chat), []);
   // `anchorSeqOf` reports the render position, fractional included: it is the
   // range check's input, not an identity check.
-  assert.equal(
-    anchorSeqOf({ key: "p", kind: "turn-process", anchorSeq: 9.9 }),
-    9.9,
-  );
-  assert.equal(
-    anchorSeqOf({ key: "p", kind: "turn-process", anchorSeq: -1 }),
-    undefined,
-  );
-  assert.equal(anchorSeqOf({ key: "p", kind: "user", data: { seq: 7 } }), 7);
+  assert.equal(anchorSeqOf({ key: 'p', kind: 'turn-process', anchorSeq: 9.9 }), 9.9);
+  assert.equal(anchorSeqOf({ key: 'p', kind: 'turn-process', anchorSeq: -1 }), undefined);
+  assert.equal(anchorSeqOf({ key: 'p', kind: 'user', data: { seq: 7 } }), 7);
 });
 
-test("a fractional anchor before the cut start is not swept in", () => {
+test('a fractional anchor before the cut start is not swept in', () => {
   const chat = chatOf([
-    message("user-1", "user", 1),
+    message('user-1', 'user', 1),
     {
-      key: "tail-0",
-      kind: "turn-tail",
+      key: 'tail-0',
+      kind: 'turn-tail',
       anchorSeq: 0.1,
-      visibility: "visible",
-      data: { seq: 0 },
+      visibility: 'visible',
+      data: { seq: 0 }
     },
-    message("assistant-2", "assistant-step", 2),
-    rewindCommand("command-3", 3, " @2 chat", 4),
+    message('assistant-2', 'assistant-step', 2),
+    rewindCommand('command-3', 3, ' @2 chat', 4)
   ]);
   assert.deepEqual(rewindCutSpans(chat), [{ start: 2, end: 4 }]);
-  assert.deepEqual(visibleChatKeys(chat), ["user-1", "tail-0"]);
+  assert.deepEqual(visibleChatKeys(chat), ['user-1', 'tail-0']);
 });
 
 test('a withdrawn turn folds away instead of vanishing in one frame', () => {
@@ -867,11 +846,16 @@ test('a withdrawn turn folds away instead of vanishing in one frame', () => {
   // departing turn would stay mounted forever at zero height.
   assert.ok(motion.includes('onRetired?: () => void'));
   assert.ok(motion.includes('retired.current?.()'));
+  // Reduced motion and a hidden page settle immediately. A playing collapse
+  // still dies on the #60 retiring deadline if WAAPI never finishes.
+  assert.match(motion, /!enabled \|\| document\.hidden/);
+  assert.match(motion, /220 \+ 240/);
+  assert.match(motion, /visibilitychange/);
   const reader = readFileSync(resolve(root, 'src/client/Reader.tsx'), 'utf8');
   assert.ok(reader.includes('<RetiringTurns'));
   assert.ok(reader.includes('RetiringTurns,'));
   // The map was the seam that unmounted turns outright.
-  assert.ok(!reader.includes('{groups.map((group) => ('));
+  assert.doesNotMatch(reader, /\{groups\.map\(/);
 });
 
 test('the collapsing lane keeps the between-turns margin it dislodged', () => {
@@ -880,4 +864,175 @@ test('the collapsing lane keeps the between-turns margin it dislodged', () => {
   // turn loses its 12px separation.
   const css = readFileSync(resolve(root, 'src/client/Reader.module.css'), 'utf8');
   assert.ok(css.includes('.retiringContent + .retiringContent > .turn { margin-top: 12px; }'));
+});
+
+test('streaming, re-render, and reconnect do not withdraw rows', () => {
+  const base = [message('user-1', 'user', 1), message('assistant-2', 'assistant-step', 2)];
+  const streaming = chatOf(base);
+  assert.equal(visibleChatKeys(streaming), streaming.order);
+  assert.deepEqual(rewindCutSpans(streaming), []);
+
+  // A text delta rewrites node data. The row set, and therefore the signature, stays.
+  const rewritten = chatOf(
+    base.map(node =>
+      node.key === 'assistant-2'
+        ? { ...node, data: { seq: 2, time: 1, content: [{ type: 'text', text: 'more tokens' }] } }
+        : node
+    )
+  );
+  assert.equal(visibleChatSignature(streaming), visibleChatSignature(rewritten));
+
+  // Reconnect builds a fresh snapshot of the same rows.
+  const reconnected = chatOf(base.map(node => ({ ...node })));
+  assert.equal(visibleChatSignature(streaming), visibleChatSignature(reconnected));
+  assert.deepEqual([...visibleChatKeys(reconnected)], ['user-1', 'assistant-2']);
+
+  // The model is still writing. A rewind command that has not succeeded is just a row.
+  const inflight = chatOf([
+    ...base,
+    {
+      key: 'command-3',
+      kind: 'command',
+      anchorSeq: 3,
+      visibility: 'visible',
+      data: { kind: 'command', seq: 3, name: 'rewind-plugin', args: '@1 chat', outcome: null }
+    },
+    message('assistant-4', 'assistant-step', 4)
+  ]);
+  assert.deepEqual(rewindCutSpans(inflight), []);
+  assert.deepEqual(
+    [...visibleChatKeys(inflight)],
+    ['user-1', 'assistant-2', 'command-3', 'assistant-4']
+  );
+});
+
+test('a non-rewind command that mentions an @seq does not cut', () => {
+  const chat = chatOf([
+    message('user-1', 'user', 1),
+    {
+      key: 'command-2',
+      kind: 'command',
+      anchorSeq: 2,
+      visibility: 'visible',
+      data: {
+        name: 'checkpoint',
+        args: '@1 chat',
+        outcome: { kind: 'success', sourceEventSeq: 3 }
+      }
+    }
+  ]);
+  assert.deepEqual(rewindCutSpans(chat), []);
+  assert.deepEqual([...visibleChatKeys(chat)], ['user-1', 'command-2']);
+});
+
+test('a successful preview that carries a marker does not roll the transcript back', () => {
+  const chat = chatOf([
+    message('user-1', 'user', 1),
+    message('assistant-2', 'assistant-step', 2),
+    rewindCommand('preview-3', 3, 'preview @1 both', 4, 'success')
+  ]);
+  assert.deepEqual(rewindCutSpans(chat), []);
+  assert.deepEqual([...visibleChatKeys(chat)], ['user-1', 'assistant-2']);
+});
+
+test('a rewind whose target is after its marker does not cut', () => {
+  const chat = chatOf([message('user-1', 'user', 1), rewindCommand('command-2', 2, '@9 chat', 3)]);
+  assert.deepEqual(rewindCutSpans(chat), []);
+  // The malformed command row is still an executed rewind, so it leaves.
+  // The earlier message does not.
+  assert.deepEqual([...visibleChatKeys(chat)], ['user-1']);
+});
+
+test('a mid-turn steering rewind keeps the earlier user message', () => {
+  const turn = { turn: 1, start: { seq: 5 }, end: { seq: 20 }, status: 'closed' };
+  const located = (
+    key: string,
+    kind: 'user' | 'steering' | 'assistant-step' | 'turn-process',
+    seq: number
+  ): CutChatNode => ({
+    key,
+    kind,
+    anchorSeq: seq,
+    visibility: 'visible',
+    location: { kind: kind === 'turn-process' ? 'turn' : 'step', turn, step: 1 },
+    data: { seq }
+  });
+  const chat = chatOf([
+    located('user-9', 'user', 9),
+    located('assistant-12', 'assistant-step', 12),
+    located('process-1', 'turn-process', 4.9),
+    located('steering-15', 'steering', 15),
+    located('assistant-18', 'assistant-step', 18),
+    rewindCommand('command-19', 19, ' @15 chat', 20)
+  ]);
+  assert.deepEqual(rewindCutSpans(chat), [{ start: 15, end: 20 }]);
+  assert.deepEqual([...visibleChatKeys(chat)], ['user-9', 'assistant-12', 'process-1']);
+});
+
+test("the next turn's process row, anchored just after the marker, stays", () => {
+  const next = { turn: 2, start: { seq: 5 }, end: { seq: 8 }, status: 'open' };
+  const chat = chatOf([
+    message('user-1', 'user', 1),
+    rewindCommand('command-3', 3, ' @1 chat', 4),
+    {
+      key: 'process-2',
+      kind: 'turn-process',
+      anchorSeq: 4.9,
+      visibility: 'visible',
+      location: { kind: 'turn', turn: next },
+      data: { controlAnchorSeq: 5 }
+    },
+    {
+      key: 'user-5',
+      kind: 'user',
+      anchorSeq: 5,
+      visibility: 'visible',
+      location: { kind: 'step', turn: next, step: 1 },
+      data: { seq: 5 }
+    }
+  ]);
+  assert.equal(cutContains(rewindCutSpans(chat), 4.9), false);
+  assert.deepEqual([...visibleChatKeys(chat)], ['process-2', 'user-5']);
+});
+
+test('re-rendering or streaming a turn does not retire it; a rewind does', () => {
+  const first = { key: 'turn:1', text: 'hello' };
+  const second = { key: 'turn:2', text: 'world' };
+  const initial = reconcileTurnSlots([], [first, second]);
+  assert.deepEqual(
+    initial.map(slot => [slot.group.key, slot.live]),
+    [
+      ['turn:1', true],
+      ['turn:2', true]
+    ]
+  );
+
+  // Same keys, new objects: a stream tick or a parent re-render.
+  const streamed = reconcileTurnSlots(initial, [
+    { key: 'turn:1', text: 'hello' },
+    { key: 'turn:2', text: 'world plus tokens' }
+  ]);
+  assert.deepEqual(
+    streamed.map(slot => slot.live),
+    [true, true]
+  );
+  assert.equal(streamed[1]?.group.text, 'world plus tokens');
+
+  // Reconnect mounts from the rows that are actually present. Nothing is pre-retired.
+  const reconnected = reconcileTurnSlots([], [{ key: 'turn:1', text: 'hello' }]);
+  assert.deepEqual(
+    reconnected.map(slot => [slot.group.key, slot.live]),
+    [['turn:1', true]]
+  );
+
+  // A rewind drops turn 2. It stays at its old index, and only that slot retires.
+  const rewound = reconcileTurnSlots(streamed, [{ key: 'turn:1', text: 'hello' }]);
+  assert.deepEqual(
+    rewound.map(slot => [slot.group.key, slot.live]),
+    [
+      ['turn:1', true],
+      ['turn:2', false]
+    ]
+  );
+  assert.equal(rewound[1]?.group.text, 'world plus tokens');
 });

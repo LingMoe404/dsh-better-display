@@ -1,7 +1,8 @@
-import { Fragment, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import css from './Reader.module.css';
 import { StreamMotionContext } from './streaming.js';
+import { reconcileTurnSlots, type TurnSlot } from './turn-slots.js';
 
 const EASING = 'cubic-bezier(.22,1,.36,1)';
 
@@ -188,18 +189,35 @@ export function RetiringContent({ visible, children, onRetired }: { visible: boo
       return;
     }
     if (!element) return;
+    // Reduced motion and a hidden page settle immediately. Focus may defer a
+    // collapse that will actually play; it must not pin a reduced-motion rewind.
+    if (!enabled || document.hidden) {
+      animation.current?.cancel(); animation.current = null;
+      setPresent(false); retired.current?.(); return;
+    }
     if (element.contains(document.activeElement)) { setFocusHeld(true); return; }
     if (focusHeld) return;
     const from = element.getBoundingClientRect().height;
     animation.current?.cancel(); animation.current = null;
-    if (!enabled || from < 1) { setPresent(false); retired.current?.(); return; }
+    if (from < 1) { setPresent(false); retired.current?.(); return; }
     const next = element.animate([{ height: `${from}px`, opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 220, easing: EASING, fill: 'both' });
     animation.current = next;
-    const settle = () => { if (animation.current === next) { animation.current = null; next.cancel(); setPresent(false); retired.current?.(); } };
+    let settled = false;
+    const settle = () => {
+      if (settled || animation.current !== next) return;
+      settled = true;
+      animation.current = null; next.cancel(); setPresent(false); retired.current?.();
+    };
     next.onfinish = settle;
+    // #60: a stalled WAAPI finish must not leave the row mounted.
     const deadline = window.setTimeout(settle, 220 + 240);
+    const onHide = () => { if (document.hidden) settle(); };
+    // The retiring-content harness stubs document without addEventListener.
+    const canListen = typeof document.addEventListener === 'function';
+    if (canListen) document.addEventListener('visibilitychange', onHide);
     return () => {
       window.clearTimeout(deadline);
+      if (canListen) document.removeEventListener('visibilitychange', onHide);
       if (animation.current === next) animation.current = null;
       next.cancel();
     };
@@ -210,12 +228,6 @@ export function RetiringContent({ visible, children, onRetired }: { visible: boo
     onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setFocusHeld(false); }}>
     {children}
   </div>;
-}
-
-/** One turn lane: `live` while it is still in the visible order. */
-interface TurnSlot<T> {
-  readonly group: T;
-  readonly live: boolean;
 }
 
 /**
@@ -245,20 +257,7 @@ export function RetiringTurns<T extends { readonly key: string }>({ groups, rend
   // order becomes `live: false` and keeps its index, which is what lets the
   // collapse play in place instead of jumping the turn to the bottom.
   useLayoutEffect(() => {
-    setSlots((current) => {
-      const incoming = new Map(groups.map((group) => [group.key, group]));
-      const next: TurnSlot<T>[] = [];
-      for (const slot of current) {
-        const stillLive = incoming.get(slot.group.key);
-        if (stillLive === undefined) { next.push({ group: slot.group, live: false }); continue; }
-        incoming.delete(slot.group.key);
-        next.push({ group: stillLive, live: true });
-      }
-      for (const group of groups) if (incoming.has(group.key)) next.push({ group, live: true });
-      const same = next.length === current.length && next.every((slot, index) =>
-        slot.live === current[index]!.live && slot.group === current[index]!.group);
-      return same ? current : next;
-    });
+    setSlots(current => reconcileTurnSlots(current, groups));
   }, [groups]);
   return (
     <>

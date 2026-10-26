@@ -61,7 +61,7 @@ function isSecretKey(key: string): boolean {
 
 function redactString(value: string): string {
   const query = value.replace(/([?&#])([^&#=]+)=([^&#]*)/g, (match, sep: string, rawKey: string) => {
-    let key = rawKey;
+    let key: string;
     try {
       key = decodeURIComponent(rawKey.replace(/\+/g, ' '));
     } catch {

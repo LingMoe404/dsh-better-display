@@ -59,20 +59,18 @@ export interface CutSpan {
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
 }
 
 function safeSeq(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
-    ? value
-    : undefined;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 
 /** The command payload of a `command` chat node, when it is structurally readable. */
 function commandOf(node: CutChatNode): Record<string, unknown> | undefined {
-  if (node.kind !== "command") return undefined;
+  if (node.kind !== 'command') return undefined;
   return asRecord(node.data);
 }
 
@@ -85,14 +83,11 @@ function commandOf(node: CutChatNode): Record<string, unknown> | undefined {
  * `rewind` stays accepted because older logs and the bili-side proxy record the
  * shorter spelling.
  */
-const REWIND_COMMANDS: ReadonlySet<string> = new Set([
-  "rewind-plugin",
-  "rewind",
-]);
+const REWIND_COMMANDS: ReadonlySet<string> = new Set(['rewind-plugin', 'rewind']);
 
 /** True when a command payload is the rewind engine command, in either spelling. */
 function isRewindCommand(command: Record<string, unknown>): boolean {
-  return typeof command.name === "string" && REWIND_COMMANDS.has(command.name);
+  return typeof command.name === 'string' && REWIND_COMMANDS.has(command.name);
 }
 
 /**
@@ -109,9 +104,7 @@ function isRewindCommand(command: Record<string, unknown>): boolean {
  */
 export function anchorSeqOf(node: CutChatNode): number | undefined {
   const raw = node.anchorSeq ?? asRecord(node.data)?.seq;
-  return typeof raw === "number" && Number.isFinite(raw) && raw >= 0
-    ? raw
-    : undefined;
+  return typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 ? raw : undefined;
 }
 
 /**
@@ -120,21 +113,19 @@ export function anchorSeqOf(node: CutChatNode): number | undefined {
  * host's human outcome copy.
  */
 export function rewindTargetOfArgs(args: unknown): number | undefined {
-  if (typeof args !== "string") return undefined;
+  if (typeof args !== 'string') return undefined;
   const match = args.match(/@(\d+)/);
   return match === null ? undefined : Number(match[1]);
 }
 
 /** True for the internal candidate-list probe (`/rewind __candidates`). */
 function isCandidateCommand(command: Record<string, unknown>): boolean {
-  return (
-    typeof command.args === "string" && command.args.includes("__candidates")
-  );
+  return typeof command.args === 'string' && command.args.includes('__candidates');
 }
 
 /** True for an impact preview (`/rewind preview @5 both`). */
 function isPreviewCommand(command: Record<string, unknown>): boolean {
-  return typeof command.args === "string" && command.args.includes("preview");
+  return typeof command.args === 'string' && command.args.includes('preview');
 }
 
 /**
@@ -146,9 +137,7 @@ function isPreviewCommand(command: Record<string, unknown>): boolean {
  */
 export function coalesceCutSpans(spans: readonly CutSpan[]): CutSpan[] {
   if (spans.length < 2) return [...spans];
-  const sorted = [...spans].sort(
-    (left, right) => left.start - right.start || left.end - right.end,
-  );
+  const sorted = [...spans].sort((left, right) => left.start - right.start || left.end - right.end);
   const merged: { start: number; end: number }[] = [];
   for (const span of sorted) {
     const last = merged.at(-1);
@@ -164,16 +153,15 @@ export function coalesceCutSpans(spans: readonly CutSpan[]): CutSpan[] {
 /**
  * True when a row anchored at `seq` falls inside one of the cut spans.
  *
- * A cut runs from the target seq through the marker's own log seq, and the
- * comparison is closed at the top only up to the NEXT INTEGER. That widening is
- * load-bearing: not every withdrawn row is a plain log event. The host anchors
- * synthetic rows at fractional offsets off a real seq (`CHAT_SYNTHETIC_SEQ_OFFSETS`
- * in the official ChatView — `turn-process` at `controlAnchorSeq - 0.1`,
- * `turn-tail` at `seq + 0.1`), and a withdrawn assistant step can be
- * re-anchored at `interruptedAt.seq - 0.9`. A marker at seq N therefore has to
- * cover synthetic anchors in `[N, N + 1)` as well, or the last `turn-process`
- * of a withdrawn turn survives alone. Spans stay disjoint: a seq before the next
- * span's start is never swept up, so new traffic between two rewinds survives.
+ * A cut runs from the target seq through the marker's own log seq, inclusive
+ * (`target <= anchorSeq && anchorSeq <= marker`), the same comparison
+ * `dsh-rewind-plugin`'s `RewindVisibilityBuilder` uses. The upper bound stops
+ * at the marker. Extending it to the next integer hides the following turn's
+ * process row, which the host anchors at `startSeq - 0.1` and therefore in
+ * `[marker, marker + 1)`. Fractional anchors inside the closed range still
+ * match: `anchorSeqOf` keeps them. A process or tail row parked outside the
+ * range is handled by `summaryTurns`, not by widening the cut. Spans stay
+ * disjoint, so new traffic between two rewinds survives.
  */
 export function cutContains(cuts: readonly CutSpan[], seq: number): boolean {
   let low = 0;
@@ -190,81 +178,81 @@ export function cutContains(cuts: readonly CutSpan[], seq: number): boolean {
     }
   }
   const span = found < 0 ? undefined : cuts[found];
-  return span !== undefined && seq < span.end + 1;
+  return span !== undefined && seq <= span.end;
 }
 
-/** The turn a node belongs to, read from its location (absent outside a turn). */
-interface TurnRef {
-  readonly id: unknown;
-  readonly start: number;
-}
-
-function turnOf(node: CutChatNode): TurnRef | undefined {
+/** The turn id a node belongs to (absent outside a turn). */
+function turnIdOf(node: CutChatNode): unknown | undefined {
   // The location's own `kind` varies (`turn` for a turn's synthetic rows,
   // `step` for one of its messages); only the turn it carries matters here.
   const turn = asRecord(asRecord(node.location)?.turn);
-  const start = safeSeq(asRecord(turn?.start)?.seq);
-  if (turn === undefined || start === undefined) return undefined;
-  return { id: turn.turn, start };
+  if (turn === undefined || !Object.hasOwn(turn, 'turn')) return undefined;
+  return turn.turn;
 }
 
 /**
  * Node kinds that SUMMARIZE a turn instead of carrying its content, so the host
  * anchors them at the turn's edges rather than at an event inside it.
  */
-const TURN_SUMMARY_KINDS: ReadonlySet<string> = new Set([
-  "turn-process",
-  "turn-tail",
-]);
+const TURN_SUMMARY_KINDS: ReadonlySet<string> = new Set(['turn-process', 'turn-tail']);
 
 /**
- * The turns whose content was withdrawn.
+ * True for a rewind command row the transcript should not keep.
  *
- * A rewind target is a user message, and the host opens its turn BEFORE the
- * message is logged (genuine session record: `turn/start`@5, `step/start`@7,
- * `user/message`@9), then anchors that turn's `turn-process` row at
- * `controlAnchorSeq - 0.1` — BELOW the earliest withdrawn event. Anchor
- * containment alone therefore always spares the process row of the very turn
- * that was withdrawn: the transcript rolled back but still announced
- * `执行过程 / 本轮已停止，已生成的内容仍保留。` That is the second reported
- * symptom, and it is why this rule reads the owning turn as well.
+ * Probes (`preview`, `__candidates`) exist only to feed the popover. An
+ * executed rewind — success plus a marker seq — is the command that performed
+ * the cut, and the plugin hides that row even when its anchor sits outside
+ * the numeric range. A failed or still-running command stays visible.
  */
-function withdrawnTurnIds(
-  chat: CutChat,
-  cuts: readonly CutSpan[],
-): Set<unknown> {
-  const withdrawn = new Set<unknown>();
-  if (cuts.length === 0) return withdrawn;
-  for (const key of chat.order) {
-    const node = chat.nodes.get(key);
-    if (node === undefined) continue;
-    // Summary rows follow their turn; only content rows vote on the turn.
-    if (TURN_SUMMARY_KINDS.has(node.kind ?? "")) continue;
-    const seq = anchorSeqOf(node);
-    if (seq === undefined || !cutContains(cuts, seq)) continue;
-    const turn = turnOf(node);
-    if (turn !== undefined) withdrawn.add(turn.id);
-  }
-  return withdrawn;
+function commandHidden(node: CutChatNode): boolean {
+  const command = commandOf(node);
+  if (command === undefined || !isRewindCommand(command)) return false;
+  if (isPreviewCommand(command) || isCandidateCommand(command)) return true;
+  const outcome = asRecord(command.outcome);
+  return outcome?.kind === 'success' && safeSeq(outcome.sourceEventSeq) !== undefined;
+}
+
+/** True when the row's own anchor falls in a cut, or the row is a rewind command to hide. */
+function anchorWithdrawn(node: CutChatNode, cuts: readonly CutSpan[]): boolean {
+  if (commandHidden(node)) return true;
+  const seq = anchorSeqOf(node);
+  return seq !== undefined && cutContains(cuts, seq);
 }
 
 /**
- * True when a row must be withdrawn because its OWN TURN was withdrawn, even
- * though the host anchored it outside the cut.
+ * Turns whose process and tail rows must leave.
  *
- * Identity, not position, is the predicate: the host anchors `turn-process` at
- * `turn.start.seq - 0.1` and `turn-tail` at `turn.end.seq + 0.1`, so a turn's
- * own edge rows sit deliberately OUTSIDE the range its events occupy. Any
- * positional guard (`turn.start <= anchorSeq`) therefore rejects exactly the
- * row this rule exists to retire — it did, and the stopped-turn notice stayed on
- * screen with every content row already withdrawn.
+ * The host opens a turn before its user message is logged and anchors
+ * `turn-process` at `controlAnchorSeq - 0.1`, below the first withdrawn
+ * event, and `turn-tail` at `turn.end.seq + 0.1`, which can sit past the
+ * marker. Containment therefore misses those two rows, and the transcript
+ * kept announcing `执行过程 / 本轮已停止，已生成的内容仍保留。`
+ *
+ * A summary leaves only when every content row of its turn is already
+ * withdrawn — the same rule as the plugin's `deriveTurnProcess`. One content
+ * row before the target (a mid-turn steering rewind) keeps the summary and
+ * that earlier message. A turn with no content rows is left alone.
  */
-function turnWithdrawn(
-  node: CutChatNode,
-  withdrawn: ReadonlySet<unknown>,
-): boolean {
-  const turn = turnOf(node);
-  return turn !== undefined && withdrawn.has(turn.id);
+function summaryTurns(chat: CutChat, cuts: readonly CutSpan[]): Set<unknown> {
+  const stays = new Map<unknown, boolean>();
+  for (const key of chat.order) {
+    const node = chat.nodes.get(key);
+    if (node === undefined || TURN_SUMMARY_KINDS.has(node.kind ?? '')) continue;
+    const id = turnIdOf(node);
+    if (id === undefined) continue;
+    const visible = node.visibility !== 'hidden' && !anchorWithdrawn(node, cuts);
+    stays.set(id, (stays.get(id) ?? false) || visible);
+  }
+  const withdrawn = new Set<unknown>();
+  for (const [id, visible] of stays) if (!visible) withdrawn.add(id);
+  return withdrawn;
+}
+
+/** True when this row is a summary of a turn whose content is fully withdrawn. */
+function summaryWithdrawn(node: CutChatNode, summaries: ReadonlySet<unknown>): boolean {
+  if (!TURN_SUMMARY_KINDS.has(node.kind ?? '')) return false;
+  const id = turnIdOf(node);
+  return id !== undefined && summaries.has(id);
 }
 
 /**
@@ -281,12 +269,15 @@ export function rewindCutSpans(chat: CutChat | undefined): CutSpan[] {
     if (node === undefined) continue;
     const command = commandOf(node);
     if (command === undefined || !isRewindCommand(command)) continue;
+    // Probes never open a span, even when a later host stamps them with a
+    // success marker. Matching them would roll the transcript back on preview.
+    if (isPreviewCommand(command) || isCandidateCommand(command)) continue;
     const outcome = asRecord(command.outcome);
-    if (outcome?.kind !== "success") continue;
+    if (outcome?.kind !== 'success') continue;
     const marker = safeSeq(outcome.sourceEventSeq);
     if (marker === undefined) continue;
     const target = rewindTargetOfArgs(command.args);
-    if (target === undefined) continue;
+    if (target === undefined || target > marker) continue;
     spans.push({ start: target, end: marker });
   }
   return coalesceCutSpans(spans);
@@ -302,23 +293,14 @@ export function rewindCutSpans(chat: CutChat | undefined): CutSpan[] {
 export function hiddenRewindSeqs(chat: CutChat | undefined): Set<number> {
   const hidden = new Set<number>();
   if (chat === undefined) return hidden;
-  for (const key of chat.order) {
-    const node = chat.nodes.get(key);
-    if (node === undefined) continue;
-    const command = commandOf(node);
-    if (command === undefined || !isRewindCommand(command)) continue;
-    if (isPreviewCommand(command) || isCandidateCommand(command)) {
-      const seq = anchorSeqOf(node);
-      if (seq !== undefined) hidden.add(seq);
-    }
-  }
   const cuts = rewindCutSpans(chat);
+  const summaries = summaryTurns(chat, cuts);
   for (const key of chat.order) {
     const node = chat.nodes.get(key);
     if (node === undefined) continue;
+    if (!anchorWithdrawn(node, cuts) && !summaryWithdrawn(node, summaries)) continue;
     const seq = anchorSeqOf(node);
-    if (seq === undefined) continue;
-    if (cutContains(cuts, seq)) hidden.add(seq);
+    if (seq !== undefined) hidden.add(seq);
   }
   return hidden;
 }
@@ -330,19 +312,14 @@ export function hiddenRewindSeqs(chat: CutChat | undefined): Set<number> {
  * so React selectors see a stable reference.
  */
 export function visibleChatKeys(chat: CutChat): readonly string[] {
-  const hidden = hiddenRewindSeqs(chat);
   const cuts = rewindCutSpans(chat);
-  const withdrawn = withdrawnTurnIds(chat, cuts);
+  const summaries = summaryTurns(chat, cuts);
   const visible: string[] = [];
   for (const key of chat.order) {
     const node = chat.nodes.get(key);
     if (node === undefined) continue;
-    if (node.visibility === "hidden") continue;
-    const seq = anchorSeqOf(node);
-    if (seq !== undefined && hidden.has(seq)) continue;
-    // A row the host anchored OUTSIDE the cut can still belong to a withdrawn
-    // turn — every synthetic turn row does, the process summary most visibly.
-    if (turnWithdrawn(node, withdrawn)) continue;
+    if (node.visibility === 'hidden') continue;
+    if (anchorWithdrawn(node, cuts) || summaryWithdrawn(node, summaries)) continue;
     visible.push(key);
   }
   return visible.length === chat.order.length ? chat.order : visible;
@@ -359,5 +336,5 @@ export function visibleChatKeys(chat: CutChat): readonly string[] {
  * a fresh array fails the `Object.is` check on every publish.
  */
 export function visibleChatSignature(chat: CutChat): string {
-  return visibleChatKeys(chat).join("\u0000");
+  return visibleChatKeys(chat).join('\u0000');
 }

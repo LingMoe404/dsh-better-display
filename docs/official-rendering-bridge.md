@@ -69,12 +69,13 @@ Reader 的 user 与 steering 行会同时发布 `data-chat-anchor-key`、`data-c
 
 - 回退的替换型标记 `user/message` 不是 append 事件，因此**不会**成为 chat 节点；命令节点的 `outcome.sourceEventSeq` 是客户端唯一的遮蔽信号。不要解析 `outcome.text`。
 - 区间按「真正重叠/相接才合并」处理，不做 `[min,max]` 塌缩，否则两次回退之间的新内容会被一并吞掉。目标消息自身也在区间内：回退恢复的是发送该消息**之前**的状态。
-- 行位置不是整数：官方 ChatView 会把合成行锚定在真实 seq 的分数偏移上（`CHAT_SYNTHETIC_SEQ_OFFSETS`：`turn-process` 在 `controlAnchorSeq - 0.1`、`turn-tail` 在 `seq + 0.1`、被中断的回答在 `seq - 0.9`）。判定必须用这个真实位置（`anchorSeqOf` 接受有限非负数），区间上界还要放宽到下一个整数，否则被撤回回合的最后一个合成行会单独残留。
-- 合成行故意锚在所属 turn 的事件区间**之外**（`turn-process` 早于 `turn/start.seq`，`turn-tail` 晚于 `turn/end.seq`），所以任何位置性守卫（例如「anchor 不早于 turn 起点才撤回」）都会恰好放过唯一要撤的那一行。撤回应以 `location.turn` 的**身份**为准：只要该 turn 有非合成行的位置落进区间，它整行都撤。
+- 行位置不是整数：官方 ChatView 会把合成行锚定在真实 seq 的分数偏移上（`CHAT_SYNTHETIC_SEQ_OFFSETS`：`turn-process` 在 `controlAnchorSeq - 0.1`、`turn-tail` 在 `seq + 0.1`、被中断的回答在 `seq - 0.9`）。判定用这个真实位置（`anchorSeqOf` 接受有限非负数），区间是闭区间 `[target, marker]`，**不要**放到下一个整数。下一回合的 `turn-process` 就锚在 `startSeq - 0.1`，落在 `[marker, marker + 1)` 里。
+- `preview` 和 `__candidates` 不产生区间，哪怕 outcome 带了 marker。目标晚于 marker 的命令也不产生区间。失败或尚未成功的命令不产生区间，所以流式输出、重连、单纯重绘都不会被当成回退。
+- 合成行故意锚在所属 turn 的事件区间之外。只有该 turn 的内容行全部落入区间（或已被宿主标成 hidden）时，才撤掉它的 `turn-process` 和 `turn-tail`。目标之前、同一 turn 里的用户消息和回答留着，过程摘要也留着。
 
 最后一条也是订阅面：回退只是就地更新既有 command 节点，`snapshot.order` 与 `snapshot.nodes` 的引用都不变，针对其一的 selector 永不触发。Reader 因此订阅 `visibleChatSignature`（可见 key 拼成的字符串），让 chat hook 的 `Object.is` 比较能够发现变化。被撤回的行随即进入 `RetiringTurns`（`src/client/motion.tsx`）的退场通道：它按原索引保留该 turn，用 220ms 的 height/opacity 收起动画播完再卸载，行下方的内容是滑上去而不是瞬移。
 
-纯图片目标现在也能撤回：这条路径只依赖命令节点的 seq，不再依赖插件对消息文本的匹配。`tests/rewind-cut.test.ts` 固定了上述规则、Reader 的接线与打包产物；`tests/reader-official-users.test.ts` 仍覆盖座位与 easyrewrite 集成。
+纯图片目标现在也能撤回：这条路径只依赖命令节点的 seq，不再依赖插件对消息文本的匹配。收起动画在减少动态效果或页面隐藏时直接落到回退后的内容。`tests/rewind-cut.test.ts` 固定了上述规则、Reader 的接线和「流式 / 重绘 / 重连不误伤」；`tests/reader-official-users.test.ts` 仍覆盖座位与 easyrewrite 集成。
 
 `dsh-easyrewrite@2.6.0` 在 `conversation.chat.node` 注册 `key: 'user', priority: -1` 的 `UserBubbleView`；撤回按钮是该组件内的 `data-dsh-easyrewrite="recall-key"`。chat 座位属性本身不会创建这个按钮，Reader 还需镜像此注册。它的快捷键使用 `data-chat-flow-kind="user"`，待定撤回的后续行隐藏使用 `data-chat-flow` 和 `data-chat-anchor-key`。
 
