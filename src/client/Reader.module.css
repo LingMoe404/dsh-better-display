@@ -40,10 +40,20 @@
 /* Every turn renders through its own retiring lane, so the sibling rule has to
    reach one level in: the margin still lands between two consecutive turns. */
 .turn + .turn, .retiringContent + .retiringContent > .turn { margin-top: 12px; }
-.userCluster { display: flex; flex-direction: column; align-self: flex-end; align-items: flex-end; max-width: min(525px, 82%); gap: 8px; min-width: 0; margin-bottom: 4px; }
-.userImages { display: flex; flex-direction: column; align-items: flex-end; max-width: 100%; min-width: 0; }
+/* Host .userStack caps itself with min(axis * 0.702, 82%). In the native column
+   that percentage resolves against a .userRow stretched across the column. The
+   slot outlet is display:contents, so the host row is this cluster's flex item.
+   Naming the official slot here misses the mirrored seat
+   (dsh-better-display.official.nodes/…), the row shrink-wraps to the text, and
+   the same 82% is applied again. The cluster fills the column. The direct child
+   of its own slot — the host row, not a nested image slot — stretches with it.
+   The host .userStack is left alone. Pending bubbles are not that row, so they
+   carry the same cap themselves. */
+.userCluster { display: flex; flex-direction: column; align-self: stretch; align-items: flex-end; width: 100%; max-width: 100%; gap: 8px; min-width: 0; margin-bottom: 4px; }
+.userCluster > [data-slot] > * { align-self: stretch; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+.userImages { display: flex; flex-direction: column; align-items: flex-end; align-self: flex-end; width: fit-content; max-width: 100%; min-width: 0; }
 .userImages .imageFigure { align-self: flex-end; }
-.user { align-self: flex-end; max-width: 100%; padding: 10px 16px; border-radius: 22px; background: var(--dsw-specific-bubble); color: var(--dsw-alias-label-primary); line-height: 24px; overflow-wrap: anywhere; box-sizing: border-box; }
+.user { align-self: flex-end; width: fit-content; max-width: min(calc(var(--dsh-chat-content-width, 748px) * 0.702), 82%); margin-left: auto; padding: 10px 16px; border-radius: var(--dsw-radius-xl, 22px); background: var(--dsw-specific-bubble); color: var(--dsw-alias-label-primary); font-size: var(--dsh-content-font-size, 14px); line-height: calc(22px + var(--dsh-content-font-delta, 0px)); font-weight: 400; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; box-sizing: border-box; }
 .user .blocks { gap: 10px; }
 .answer { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
 .readingText { min-width: 0; }
@@ -541,7 +551,7 @@
 [data-motion=off] .turnStatusLabel { animation: none !important; color: var(--dsw-static-deepseek-500, #4d6bfe) !important; -webkit-text-fill-color: var(--dsw-static-deepseek-500, #4d6bfe) !important; }
 @media (prefers-reduced-motion: reduce) { .turnStatusLabel { animation: none !important; color: var(--dsw-static-deepseek-500, #4d6bfe) !important; -webkit-text-fill-color: var(--dsw-static-deepseek-500, #4d6bfe) !important; } }
 @media (pointer: coarse) { .disclosureButton { min-height: 44px; } }
-@media (max-width: 600px) { .root { padding-inline: 20px; } .column { gap: 18px; } .toolbar { font-size: 11px; } .user { max-width: 90%; } }
+@media (max-width: 600px) { .root { padding-inline: 20px; } .column { gap: 18px; } .toolbar { font-size: 11px; } }
 
 /* Measured flow owns geometry; steps never change React parents when folded. */
 .choreographedFlow { display: flex; flex-direction: column; min-width: 0; overflow-anchor: none; }
