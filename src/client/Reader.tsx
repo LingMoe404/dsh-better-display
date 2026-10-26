@@ -57,6 +57,10 @@ function inboxText(item: { content?: readonly unknown[] }): string {
   }).map(block => block.text).join('');
 }
 
+function inboxAttachmentCount(item: { content?: readonly unknown[] }): number {
+  return (item.content ?? []).filter(block => typeof block === 'object' && block !== null && (block as { type?: unknown }).type !== 'text').length;
+}
+
 function cleanErrorMessage(raw: string | undefined): string {
   if (!raw) return '模型服务暂时无响应或连接中断，请稍后重试。';
   let str = raw.trim();
