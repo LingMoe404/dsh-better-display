@@ -8,6 +8,14 @@
   flex: 0 0 auto;
   overflow-anchor: auto;
   container-type: inline-size;
+  /* 40px at the host's default 14px content size. Settings and theme plugins
+     move every flow row by --dsh-content-font-delta; the lane has to follow
+     or the next sticky band lands on the previous one. */
+  --reader-lane-block: calc(40px + var(--dsh-content-font-delta, 0px));
+  /* Wallpaper themes punch --dsw-alias-bg-base out so a fixed backdrop shows
+     through. An opaque canvas still wins. A transparent canvas reveals the
+     inner surface, then a label scrim, so answer text cannot share the lane. */
+  --reader-lane-plate: linear-gradient(var(--dsw-alias-bg-base), var(--dsw-alias-bg-base)), linear-gradient(var(--dsw-alias-bg-layer-1, transparent), var(--dsw-alias-bg-layer-1, transparent)), linear-gradient(color-mix(in srgb, var(--dsw-alias-label-primary, #0f1115) 92%, transparent), color-mix(in srgb, var(--dsw-alias-label-primary, #0f1115) 92%, transparent));
 }
 .column { max-width: var(--dsh-chat-content-width, 748px); width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; min-width: 0; }
 .toolbar { position: sticky; top: 0; display: flex; justify-content: flex-end; align-items: center; gap: 6px; min-height: 32px; padding: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; background: var(--dsw-alias-bg-base); backdrop-filter: blur(12px); }
@@ -24,7 +32,7 @@
 .turn { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 /* Keep pinned process lanes inside the process/answer block, before turn-tail UI. */
 .turnStickyRegion { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.turnStickyLanes { position: sticky; top: max(var(--reader-toolbar-height, 40px), var(--reader-status-height, 40px)); z-index: 6; display: flex; flex-direction: column; min-width: 0; }
+.turnStickyLanes { position: sticky; top: var(--reader-toolbar-height, var(--reader-lane-block, 40px)); z-index: 6; display: flex; flex-direction: column; min-width: 0; }
 .turn + .turn { margin-top: 12px; }
 .userCluster { display: flex; flex-direction: column; align-self: flex-end; align-items: flex-end; max-width: min(525px, 82%); gap: 8px; min-width: 0; margin-bottom: 4px; }
 .userImages { display: flex; flex-direction: column; align-items: flex-end; max-width: 100%; min-width: 0; }
@@ -48,9 +56,9 @@
 .blocks > :last-child { margin-bottom: 0; }
 .blocks :global(.md-table-wide) { max-width: 100%; }
 .disclosure { min-width: 0; }
-.disclosureButton { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 32px; border: 0; background: transparent; border-radius: 7px; color: var(--dsw-alias-label-tertiary); font-size: 14px; line-height: 24px; font-weight: 400; padding: 4px 6px; margin-left: -6px; text-align: left; }
+.disclosureButton { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 32px; border: 0; background: transparent; border-radius: 7px; color: var(--dsw-alias-label-tertiary); font-size: calc(14px + var(--dsh-content-font-delta, 0px)); line-height: calc(24px + var(--dsh-content-font-delta, 0px)); font-weight: 400; padding: 4px 6px; margin-left: -6px; text-align: left; }
 .disclosure[data-reader-status-only] { display: flex; align-items: center; min-height: 32px; }
-.statusText { display: inline-flex; min-width: 0; max-width: 100%; font-size: 14px; line-height: 24px; font-weight: 400; color: var(--dsw-alias-label-secondary); }
+.statusText { display: inline-flex; min-width: 0; max-width: 100%; font-size: calc(14px + var(--dsh-content-font-delta, 0px)); line-height: calc(24px + var(--dsh-content-font-delta, 0px)); font-weight: 400; color: var(--dsw-alias-label-secondary); }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 /* Transitions.dev — Thinking states, supplied by the user. Native DSH colors;
    the hidden sizer shares this font and the short phases share a left edge. */
@@ -476,7 +484,7 @@
 .morphDrawer { overflow: hidden; height: 0; transform-origin: top center; will-change: height, opacity, transform; }
 .liveFoldImpact { animation: liveFoldElastic 180ms cubic-bezier(0.2, 0, 0, 1) both; }
 @keyframes liveFoldElastic { 0% { transform: scale(1); } 50% { transform: scale(1.015); } 100% { transform: scale(1); } }
-.liveFoldContainer { position: sticky; top: calc(max(var(--reader-toolbar-height, 40px), var(--reader-status-height, 40px)) + var(--reader-sticky-lane, 40px) * 2); z-index: 4; background: var(--dsw-alias-bg-base); backdrop-filter: blur(12px); padding: 4px 0; margin-bottom: 6px; animation: liveFoldPulse 320ms cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: left center; will-change: transform, opacity; }
+.liveFoldContainer { position: sticky; top: calc(var(--reader-toolbar-height, var(--reader-lane-block, 40px)) + var(--reader-status-height, var(--reader-lane-block, 40px)) + var(--reader-summary-height, var(--reader-lane-block, 40px))); z-index: 4; background: var(--dsw-alias-bg-base); backdrop-filter: blur(12px); padding: 4px 0; margin-bottom: 6px; animation: liveFoldPulse 320ms cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: left center; will-change: transform, opacity; }
 @keyframes liveFoldPulse { 0% { transform: translateY(-4px) scale(0.98); opacity: 0.8; } 50% { transform: translateY(0) scale(1.02); opacity: 1; } 100% { transform: translateY(0) scale(1); opacity: 1; } }
 [data-motion=off] .liveFoldContainer { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { .liveFoldContainer { animation: none !important; } }
@@ -535,7 +543,7 @@
    input card. Only the top toolbar lane may use 7: it pins to the scrollport's
    first lane and its containing block always ends above the seat, so it can
    never reach the band, and 7 keeps it above the host's code-block banners. */
-.toolbar { width: 100%; max-width: 100%; align-self: stretch; box-sizing: border-box; min-height: 40px; z-index: 7; border-bottom: 0; backdrop-filter: none; }
+.toolbar { width: 100%; max-width: 100%; align-self: stretch; box-sizing: border-box; min-height: var(--reader-lane-block, 40px); z-index: 7; border-bottom: 0; backdrop-filter: none; }
 /* Every sticky lane used to pin to the SAME top: the status row, the folded
    summary row and the live-fold container all sat at
    max(toolbar-height, status-height) with z-index 6. Three siblings competing
@@ -543,7 +551,7 @@
    内容被盖住、看不见" was: the disclosure opened, and the row that followed
    pinned straight on top of it. Give each lane its own band instead, stacked
    from the measured top: status first, then the summary, then the fold body. */
-.turnProcessSticky { box-sizing: border-box; width: calc(100% - var(--reader-control-width, 148px)); top: max(var(--reader-toolbar-height, 40px), var(--reader-status-height, 40px)); min-height: 40px; padding-right: 0; z-index: 6; border-bottom: 1px solid transparent; background-clip: padding-box; backdrop-filter: none; }
+.turnProcessSticky { box-sizing: border-box; width: calc(100% - var(--reader-control-width, 148px)); top: var(--reader-toolbar-height, var(--reader-lane-block, 40px)); min-height: var(--reader-lane-block, 40px); padding-right: 0; z-index: 6; border-bottom: 1px solid transparent; background-clip: padding-box; backdrop-filter: none; }
 /* A pinned lane's in-flow gap stays visible as an uncovered scrollport strip
    while the lane itself paints opaque. Cast each plate upward over its strip
    (the .turn 14px gap / the prior cell's 16px flowCellInner padding) so the
@@ -552,17 +560,17 @@
    toolbar's control group, which leaves the same kind of strip there; paint
    it too. The toolbar is z-index 7, above the lane's 6, so its buttons still
    render on top of the extension. */
-.turnProcessSticky { box-shadow: 0 -14px 0 var(--dsw-alias-bg-base), var(--reader-control-width, 148px) 0 0 var(--dsw-alias-bg-base); }
+.turnProcessSticky { box-shadow: 0 -14px 0 var(--dsw-alias-bg-base), var(--reader-control-width, 148px) 0 0 var(--dsw-alias-bg-base), 0 -14px 0 var(--dsw-alias-bg-layer-1, transparent), var(--reader-control-width, 148px) 0 0 var(--dsw-alias-bg-layer-1, transparent), 0 -14px 0 color-mix(in srgb, var(--dsw-alias-label-primary, #0f1115) 92%, transparent), var(--reader-control-width, 148px) 0 0 color-mix(in srgb, var(--dsw-alias-label-primary, #0f1115) 92%, transparent); }
 .turnStickyLanes .turnProcessSticky, .turnStickyLanes .closedProcessSummary { position: static; top: auto; z-index: auto; }
 /* The same summary row stays in flow until it reaches the measured top lane. */
-.flowCell[data-flow-summary], .closedProcessSummary { position: sticky; top: calc(max(var(--reader-toolbar-height, 40px), var(--reader-status-height, 40px)) + var(--reader-sticky-lane, 40px)); z-index: 5; overflow: visible; box-sizing: border-box; min-height: 40px; padding-block: 4px; background: var(--dsw-alias-bg-base); border-bottom: 0; }
+.flowCell[data-flow-summary], .closedProcessSummary { position: sticky; top: calc(var(--reader-toolbar-height, var(--reader-lane-block, 40px)) + var(--reader-status-height, var(--reader-lane-block, 40px))); z-index: 5; overflow: visible; box-sizing: border-box; min-height: var(--reader-lane-block, 40px); padding-block: 4px; background: var(--dsw-alias-bg-base); border-bottom: 0; }
 /* Keep the official CodeBlock banner's internal z-index inside its wrapper so Reader lanes stay above it. */
 .root :global(.md-code-block) { z-index: 0; }
 /* Keep native code actions below the pinned Reader lanes. */
-.turnStickyRegion:has(> .turnStickyLanes > .closedProcessSummary), .turnStickyRegion:has(.flowCell[data-flow-summary]) { --reader-code-summary-height: var(--reader-sticky-lane, 40px); }
+.turnStickyRegion:has(> .turnStickyLanes > .closedProcessSummary), .turnStickyRegion:has(.flowCell[data-flow-summary]) { --reader-code-summary-height: var(--reader-summary-height, var(--reader-lane-block, 40px)); }
 .root :global(.md-code-block > :has(+ [data-code-block-content])) { top: calc(max(var(--reader-toolbar-height, 40px), var(--reader-status-height, 0px)) + var(--reader-status-height, 0px) + var(--reader-code-summary-height, 0px)); }
-.flowCell[data-flow-summary] { box-shadow: 0 -16px 0 var(--dsw-alias-bg-base); }
-.closedProcessSummary { box-shadow: 0 -14px 0 var(--dsw-alias-bg-base); }
+.flowCell[data-flow-summary] { box-shadow: 0 -16px 0 var(--dsw-alias-bg-base), 0 -16px 0 var(--dsw-alias-bg-layer-1, transparent), 0 -16px 0 color-mix(in srgb, var(--dsw-alias-label-primary, #0f1115) 92%, transparent); }
+.closedProcessSummary { box-shadow: 0 -14px 0 var(--dsw-alias-bg-base), 0 -14px 0 var(--dsw-alias-bg-layer-1, transparent), 0 -14px 0 color-mix(in srgb, var(--dsw-alias-label-primary, #0f1115) 92%, transparent); }
 .foldControl { display: inline-flex; align-items: center; gap: 0; padding: 2px; border-radius: 8px; background: var(--dsw-alias-bg-module-platform); }
 .foldStop { border: 0; background: transparent; color: var(--dsw-alias-label-secondary); padding: 2px 8px; border-radius: 6px; white-space: nowrap; font: inherit; font-size: 12px; line-height: 18px; cursor: pointer; }
 .foldStop[data-on] { background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); }
@@ -576,6 +584,17 @@
 .thinkSizer { white-space: normal; overflow-wrap: anywhere; }
 .thinkText { white-space: normal; overflow-wrap: anywhere; overflow: visible; text-overflow: clip; }
 
+/* The shorthand `background` above paints the canvas token. This image stack
+   sits on top of it and only becomes visible when that token is transparent. */
+.toolbar,
+.turnStickyLanes,
+.turnProcessSticky,
+.liveFoldContainer,
+.flowCell[data-flow-summary],
+.closedProcessSummary {
+  background-image: var(--reader-lane-plate);
+  background-repeat: no-repeat;
+}
 /* Skin mode is opt-in, and it has one job: some readers run a skinned host
    (wallpaper / theme), and the reader's own opaque rows hide that skin. On =
    every surface the reader paints becomes a thin token-derived wash and the
@@ -631,7 +650,7 @@
 }
 .root[data-reader-glass] .turnStickyLanes { display: contents; position: static; top: auto; z-index: auto; }
 .root[data-reader-glass] .turnStickyRegion { --reader-code-summary-height: 0px; }
-.root[data-reader-glass] .turnStickyLanes .turnProcessSticky { position: sticky; top: max(var(--reader-toolbar-height, 40px), var(--reader-status-height, 40px)); z-index: 6; }
+.root[data-reader-glass] .turnStickyLanes .turnProcessSticky { position: sticky; top: var(--reader-toolbar-height, var(--reader-lane-block, 40px)); z-index: 6; }
 /* User bubble becomes a sleek translucent frosted pill in skin mode */
 .root[data-reader-glass] .user {
   background: color-mix(in srgb, var(--dsw-specific-bubble, rgba(0,0,0,.08)) 25%, transparent);

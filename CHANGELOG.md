@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Keep the elapsed-time row and the closed process summary from painting over the answer heading when a third-party theme clears `--dsw-alias-bg-base` or raises `--dsh-content-font-size`. Sticky bands follow the measured row and the host font delta, and a transparent canvas falls back to the opaque surface token (#66).
+
 ## 0.3.8 — 2026-10-13
 
 - Fix host entry bundling in tsdown: stop externalising relative host imports and add a portable output build guard to prevent missing bundled modules (`ERR_MODULE_NOT_FOUND ./skill-roots.ts`, #58, #59, #61).

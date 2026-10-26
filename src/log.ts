@@ -65,7 +65,7 @@ function redactString(value: string): string {
     try {
       key = decodeURIComponent(rawKey.replace(/\+/g, ' '));
     } catch {
-      key = rawKey;
+      // Malformed query text keeps the raw key for the secret check.
     }
     return isSecretKey(key) ? `${sep}${rawKey}=${REDACTED}` : match;
   });
