@@ -8,3 +8,16 @@ report
 dist
 *.tgz
 package-lock.json
+# Dense on purpose. printWidth 100 pushes Reader.tsx past the eslint max-lines
+# cap, and it rewrites unrelated lines in the other historical files below.
+src/client/Reader.tsx
+src/client/Reader.module.css
+src/client/motion.tsx
+src/client/ChoreographedFlow.tsx
+src/client/McpAppFrame.tsx
+src/client/SettingsSection.tsx
+src/client/ToolActivity.tsx
+src/client/live-turn.ts
+src/client/timeline.ts
+src/log.ts
+docs/official-rendering-bridge.md

@@ -1,7 +1,6 @@
 import { type ReactNode } from 'react';
-import type { ChatConversationViewNode, TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client';
-import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client';
-import type { AssistantActionOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client';
+import type { AssistantActionOwnerProps, ChatConversationViewNode, ChatNode, TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client';
+import type { AssistantBlock, ToolCallBlock } from '@deepseek-ai/dsh-client-ui-conversation/client';
 type MessageId = AssistantActionOwnerProps['messageId'];
 import type { BlockRenderProps } from './types.js';
 export declare function OfficialActions({ official, messageId }: Pick<BlockRenderProps, 'official'> & {
@@ -17,6 +16,21 @@ export declare function OfficialNode({ node, fallback, ...render }: BlockRenderP
     node: ChatConversationViewNode;
     fallback: ReactNode;
 }): string | number | boolean | Iterable<ReactNode> | import("react").JSX.Element | null | undefined;
+type AssistantBodyProps = BlockRenderProps & {
+    node: ChatNode<'assistant-step'>;
+    blocks: readonly AssistantBlock[];
+    streaming?: boolean;
+    holdFormatting?: boolean;
+    startedAt?: number;
+    interrupted?: boolean;
+    liveText?: boolean;
+};
+/**
+ * Body of one assistant segment. A mirrored assistant-step replacement draws
+ * it; Reader markdown is the fallback when no replacement is registered.
+ * The caller keeps reasoning blocks on the reading card.
+ */
+export declare function OfficialAssistantBody({ node, blocks, streaming, holdFormatting, startedAt, interrupted, liveText, ...render }: AssistantBodyProps): string | number | boolean | Iterable<ReactNode> | import("react").JSX.Element | null | undefined;
 export declare function OfficialTail({ official, owner, produced }: Pick<BlockRenderProps, 'official'> & {
     owner?: TurnTailOwnerProps;
     produced: readonly string[];

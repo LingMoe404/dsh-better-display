@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Reader theme overlap</title>
+  <link rel="stylesheet" href="/Reader.module.css">
+  <link rel="stylesheet" href="/MarkdownText.module.css">
+  <style>
+    :root {
+      --dsh-content-font-size: 24px;
+      --dsh-content-font-delta: 10px;
+      --dsw-alias-bg-base: transparent;
+      --dsw-alias-bg-layer-1: #102040;
+      --dsw-alias-label-primary: #f5f7fa;
+      --dsw-alias-label-secondary: #c5cad3;
+      --dsw-alias-label-tertiary: #9aa3af;
+      --dsw-font-family: ui-sans-serif, sans-serif;
+      --dsw-font-markdown-h2: 700 29px/38px var(--dsw-font-family);
+      --dsw-font-markdown-base: 24px/34px var(--dsw-font-family);
+    }
+    body { margin: 0; background: #ff00aa; }
+    .scroll { height: 280px; overflow: auto; background: #ff00aa; }
+    .spacer { height: 900px; }
+  </style>
+</head>
+<body>
+  <div class="scroll" id="scroll">
+    <div class="root" data-dsh-better-display="fixture">
+      <div class="column" data-chat-flow="">
+        <div class="toolbar" data-reader-lane="toolbar"><button class="textButton">自动折叠开</button></div>
+        <section class="turn" data-reader-turn="1">
+          <div class="turnStickyRegion">
+            <div class="turnStickyLanes">
+              <div class="turnProcessSticky" data-reader-lane="status">
+                <button class="disclosureButton" type="button"><span class="statusText">用时 64 分 24 秒</span></button>
+              </div>
+              <div class="closedProcessSummary" id="summary" data-reader-closed-summary>
+                <div class="summaryRow">
+                  <button class="disclosureButton" type="button"><span class="foldSummary">思考×79 · 输出×15 · 工具×79 · 记录×3</span></button>
+                  <span class="diffStatRoot"><button class="diffStatButton" type="button"><span class="diffAdded">+751</span><span class="diffRemoved">-63</span></button></span>
+                </div>
+              </div>
+            </div>
+            <div class="answer">
+              <div class="markdown">
+                <h2 id="heading">核心对比 (2024/25 赛季, Deloitte 统一口径)</h2>
+                <p class="spacer">回答正文在标题下面继续，用来把标题滚进吸顶带。</p>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="turn" data-reader-turn="2">
+          <div class="turnProcessSticky" id="flow-status" data-reader-lane="flow-status">
+            <button class="disclosureButton" type="button"><span class="statusText">用时 64 分 24 秒，字号放大后这一行变高</span></button>
+          </div>
+          <div class="flowCell" id="flow-summary" data-flow-summary>
+            <button class="disclosureButton" type="button"><span class="foldSummary">思考×79 · 输出×15 · 工具×79 · 记录×3</span></button>
+          </div>
+          <div class="spacer"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+  <script>
+    const root = document.querySelector('[data-dsh-better-display]');
+    const turn = document.querySelector('[data-reader-turn="2"]');
+    const toolbar = document.querySelector('.toolbar');
+    const flowStatus = document.querySelector('#flow-status');
+    const flowSummary = document.querySelector('#flow-summary');
+    const publish = () => {
+      root.style.setProperty('--reader-toolbar-height', `${Math.ceil(toolbar.getBoundingClientRect().height)}px`);
+      turn.style.setProperty('--reader-status-height', `${Math.ceil(flowStatus.getBoundingClientRect().height)}px`);
+      turn.style.setProperty('--reader-summary-height', `${Math.ceil(flowSummary.getBoundingClientRect().height)}px`);
+    };
+    publish();
+    for (const el of [toolbar, flowStatus, flowSummary]) new ResizeObserver(publish).observe(el);
+    window.__themeOverlapReady = true;
+  </script>
+</body>
+</html>

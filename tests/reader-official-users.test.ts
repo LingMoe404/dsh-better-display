@@ -16,6 +16,16 @@ const browserRuntime = join(homedir(), '.codex/playwright-runtime/runtime.mjs');
 const skip = !harness ? 'DSH Harness source not available'
   : !existsSync(browserRuntime) ? 'pinned Chromium runtime not available' : false;
 
+test('official user output stays inside the cluster that carries the host width', () => {
+  const root = resolve(import.meta.dirname, '..');
+  const source = readFileSync(join(root, 'src/client/Reader.tsx'), 'utf8');
+  const css = readFileSync(join(root, 'src/client/Reader.module.css'), 'utf8');
+  assert.match(source, /className=\{css\.userCluster\}[^>]*data-reader-key=\{nodeKey\}[^>]*>\{rendered\}/);
+  assert.match(css, /\.userCluster\s*\{[^}]*width:\s*100%/);
+  assert.match(css, /\.userCluster > \[data-slot\] > \* \{[^}]*width:\s*100%/);
+  assert.doesNotMatch(css, /\[data-slot="conversation\.chat\.node"\]/);
+});
+
 test('headless Reader users retain official renderers, anchors and empty-key fallback', { skip }, async () => {
   const root = resolve(import.meta.dirname, '..');
   const require = createRequire(join(root, 'package.json'));

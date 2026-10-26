@@ -41,7 +41,7 @@ export default defineConfig({
         test: {
           name: 'unit',
           include: ['tests/**/*.test.ts'],
-          exclude: [...testExclude, 'tests/reader-official-users.test.ts'],
+          exclude: [...testExclude, 'tests/reader-official-users.test.ts', 'tests/reader-user-bubble.test.ts'],
           retry: 0,
           fileParallelism: true,
         },
@@ -53,7 +53,7 @@ export default defineConfig({
         // try, so only this project uses retry 1. Unit tests stay at retry 0.
         test: {
           name: 'browser-runtime',
-          include: ['tests/reader-official-users.test.ts'],
+          include: ['tests/reader-official-users.test.ts', 'tests/reader-user-bubble.test.ts'],
           exclude: testExclude,
           retry: 1,
           fileParallelism: true,

@@ -2,6 +2,7 @@ import type { AssistantBlock, ToolCallBlock, TurnLocation } from '@deepseek-ai/d
 import type { ChatConversationViewNode } from '@deepseek-ai/dsh-client-ui-chat/client';
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type { ReaderGroup } from './projection.js';
+import { anchorSeqOf, cutContains, rewindCutSpans, type CutChatNode } from './rewind-cut.js';
 
 export type ToolDraft = Extract<AssistantBlock, { kind: 'tool-call' }>;
 export type ToolPhase = 'preparing' | 'running' | 'returned' | 'succeeded' | 'failed' | 'interrupted';
@@ -12,11 +13,52 @@ export interface ToolActivityEntry {
 }
 export type ReaderFlowEntry = ToolActivityEntry | { kind: 'node'; key: string; nodeKey: string; order: number };
 
-/** Public Step data includes tool-only model output before a chat node exists. */
-export function readerFlow(group: ReaderGroup, turn: TurnLocation | undefined, get: (key: string) => ChatConversationViewNode | undefined): ReaderFlowEntry[] {
+/**
+ * callId of a tool-call chat node. Drafts for a call whose node was cut must
+ * not be reintroduced after `group.keys` has already dropped that node.
+ */
+function toolCallId(node: ChatConversationViewNode): string | undefined {
+  const callId = (node.data as { root?: { callId?: unknown } } | null)?.root?.callId;
+  return typeof callId === 'string' && callId.length > 0 ? callId : undefined;
+}
+
+/** callIds whose tool-call node sits inside a rewind cut. */
+function cutToolCallIds(
+  order: readonly string[],
+  get: (key: string) => ChatConversationViewNode | undefined,
+  spans: readonly { readonly start: number; readonly end: number }[],
+): Set<string> {
+  const ids = new Set<string>();
+  for (const key of order) {
+    const node = get(key);
+    if (node?.kind !== 'tool-call') continue;
+    const seq = anchorSeqOf(node as CutChatNode);
+    if (seq === undefined || !cutContains(spans, seq)) continue;
+    const callId = toolCallId(node);
+    if (callId !== undefined) ids.add(callId);
+  }
+  return ids;
+}
+
+/**
+ * Public Step data includes tool-only model output before a chat node exists.
+ *
+ * `sourceOrder` is the unfiltered chat order. Drafts that belong to a cut step,
+ * or to a call whose tool-call node was cut, are not put back. A draft that
+ * still has no tool-call node, on a step outside the cut, stays — that is the
+ * in-flight call the host has not published a node for yet.
+ */
+export function readerFlow(
+  group: ReaderGroup,
+  turn: TurnLocation | undefined,
+  get: (key: string) => ChatConversationViewNode | undefined,
+  sourceOrder?: readonly string[],
+): ReaderFlowEntry[] {
   const flow: ReaderFlowEntry[] = [];
   const calls = new Map<string, ToolActivityEntry>();
   const assistantOrder = new Map<number, number>();
+  const spans = sourceOrder === undefined ? [] : rewindCutSpans({ order: sourceOrder, nodes: { get } });
+  const cutCalls = spans.length === 0 || sourceOrder === undefined ? undefined : cutToolCallIds(sourceOrder, get, spans);
   for (const key of group.keys) {
     const node = get(key);
     if (!node || node.visibility === 'hidden') continue;
@@ -31,10 +73,15 @@ export function readerFlow(group: ReaderGroup, turn: TurnLocation | undefined, g
   }
   for (const step of turn?.steps ?? []) {
     const data = step.data.get('assistant-step');
+    const stepSeq = step.start?.seq;
+    const stepCut = typeof stepSeq === 'number' && spans.length > 0 && cutContains(spans, stepSeq);
     let index = 0;
     for (const draft of data?.blocks ?? []) {
       if (draft.kind !== 'tool-call' || !draft.callId) continue;
       const previous = calls.get(draft.callId);
+      // A visible tool row still receives its draft. A new row is the streaming
+      // case — unless this step, or this call's tool-call node, was cut.
+      if (!previous && (stepCut || cutCalls?.has(draft.callId) === true)) continue;
       calls.set(draft.callId, previous ? { ...previous, draft } : {
         kind: 'tool', key: `reader-tool:${draft.callId}`, callId: draft.callId, step: step.step, draft,
         order: (assistantOrder.get(step.step) ?? step.start?.seq ?? 0) + .01 + index++ / 10000,

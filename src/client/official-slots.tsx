@@ -56,12 +56,28 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-// Existing Reader presentations own these rows. All other node kinds, including
-// future registrations, reach the official renderer through the mirror seat.
-// 'user' and 'steering' are mirrored too, so third-party renderers registered
-// on the official node slot (e.g. message-recall buttons) keep working inside
-// the Reader instead of being silently dropped.
-const READER_OWNED_NODES = new Set(['assistant-step', 'tool-call', 'turn-tail', 'turn-process']);
+// Reader draws these rows itself. Everything else, including future kinds, is
+// mirrored so the official renderer still runs inside the reading view.
+// 'user' and 'steering' stay mirrored (message-recall buttons and the like).
+// 'assistant-step' is special: the official renderer is priority 0 and Reader
+// keeps that presentation. A strictly lower priority is a keyed-slot
+// replacement (lowest priority renders) and is mirrored for body content.
+const READER_OWNED_NODES = new Set(['tool-call', 'turn-tail', 'turn-process']);
+
+/** Official `AssistantNodeView` registers at priority 0. Lower wins. */
+export const OFFICIAL_ASSISTANT_PRIORITY = 0;
+
+/**
+ * Mirror a chat-node registration into the Reader seat.
+ * Assistant replacements are the entries that would actually replace the
+ * official renderer on the host. The official priority itself stays out, so
+ * Reader keeps its own answer markdown until a plugin opts in.
+ */
+export function acceptMirroredChatNode(entry: StoredEntry): boolean {
+  const key = entry.options.key ?? '';
+  if (key === 'assistant-step') return (entry.options.priority ?? OFFICIAL_ASSISTANT_PRIORITY) < OFFICIAL_ASSISTANT_PRIORITY;
+  return !READER_OWNED_NODES.has(key);
+}
 const EXPECTED: Record<OfficialFamily, Spec> = {
   actions: { kind: 'list', scope: 'session' },
   tools: { kind: 'keyed', scope: 'session' },
@@ -201,7 +217,7 @@ export function installOfficialSlots(ctx: Context): () => void {
           throw new Error(`Official slot contract changed: ${source}`);
         }
         return mirrorOfficialSlot(slots, source, target, `dsh-better-display.official.${family}`,
-          family === 'nodes' ? entry => !READER_OWNED_NODES.has(entry.options.key ?? '') : undefined);
+          family === 'nodes' ? acceptMirroredChatNode : undefined);
       }));
     }
   } catch (error) {

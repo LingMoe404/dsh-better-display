@@ -21,8 +21,15 @@ export type ReaderFlowEntry = ToolActivityEntry | {
     nodeKey: string;
     order: number;
 };
-/** Public Step data includes tool-only model output before a chat node exists. */
-export declare function readerFlow(group: ReaderGroup, turn: TurnLocation | undefined, get: (key: string) => ChatConversationViewNode | undefined): ReaderFlowEntry[];
+/**
+ * Public Step data includes tool-only model output before a chat node exists.
+ *
+ * `sourceOrder` is the unfiltered chat order. Drafts that belong to a cut step,
+ * or to a call whose tool-call node was cut, are not put back. A draft that
+ * still has no tool-call node, on a step outside the cut, stays — that is the
+ * in-flight call the host has not published a node for yet.
+ */
+export declare function readerFlow(group: ReaderGroup, turn: TurnLocation | undefined, get: (key: string) => ChatConversationViewNode | undefined, sourceOrder?: readonly string[]): ReaderFlowEntry[];
 export declare function objectValue(value: unknown): Record<string, unknown> | null;
 export declare function stringValue(record: Record<string, unknown> | null, ...keys: string[]): string | undefined;
 export declare function inputFields(raw: string): Record<string, unknown>;

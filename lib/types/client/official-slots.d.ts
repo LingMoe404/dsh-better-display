@@ -48,6 +48,15 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
         'dsh-better-display.official.images/conversation.message.images': SlotMap['conversation.message.images'];
     }
 }
+/** Official `AssistantNodeView` registers at priority 0. Lower wins. */
+export declare const OFFICIAL_ASSISTANT_PRIORITY = 0;
+/**
+ * Mirror a chat-node registration into the Reader seat.
+ * Assistant replacements are the entries that would actually replace the
+ * official renderer on the host. The official priority itself stays out, so
+ * Reader keeps its own answer markdown until a plugin opts in.
+ */
+export declare function acceptMirroredChatNode(entry: StoredEntry): boolean;
 /**
  * Reader already presents produced paths with its copy/reveal actions. RC2's
  * official tail additionally owns explicit `present` artifacts. Leave those

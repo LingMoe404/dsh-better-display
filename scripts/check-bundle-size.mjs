@@ -1,8 +1,11 @@
 import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-/** Committed lib/dsh-better-display.js size when this budget was set. */
-export const BASELINE_BYTES = 11482;
+/**
+ * Fresh tsdown host bundle. The previously committed file omitted flags, log,
+ * and metrics, which the entry already imports, so CI's rebuild is this size.
+ */
+export const BASELINE_BYTES = 18503;
 export const BUDGET_BYTES = Math.floor(BASELINE_BYTES * 1.1);
 
 export function judgeBundle(size, budget = BUDGET_BYTES) {
@@ -21,7 +24,7 @@ function selfTest() {
   const over = judgeBundle(BUDGET_BYTES + 1);
   const under = judgeBundle(BASELINE_BYTES);
   const skipped = reportBundle(resolve(import.meta.dirname, 'no-such-bundle.js'));
-  if (BUDGET_BYTES !== 12630 || over.code !== 1 || under.code !== 0 || skipped.code !== 0 || !skipped.message.startsWith('skip:')) {
+  if (BUDGET_BYTES !== 20353 || over.code !== 1 || under.code !== 0 || skipped.code !== 0 || !skipped.message.startsWith('skip:')) {
     console.error('check-bundle-size self-test failed', { over, under, skipped, BUDGET_BYTES });
     process.exit(1);
   }
