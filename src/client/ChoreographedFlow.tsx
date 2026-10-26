@@ -10,6 +10,7 @@ import { FoldSummaryText } from './LiveFold.js';
 import { DiffStat } from './DiffPanel.js';
 import { StreamMotionContext } from './streaming.js';
 import css from './Reader.module.css';
+import { useSummaryLane } from './StickyLane.js';
 
 const FlowSnapshot = createContext<ChatSnapshot | null>(null);
 /** Public projection only. Descendants cannot leak live data through a frozen frame. */
@@ -44,6 +45,7 @@ function FlowCell({ hidden, instant, motion, rowKey, children, summary = false }
   hidden: boolean; instant: boolean; motion: boolean; rowKey: string; children: ReactNode; summary?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  useSummaryLane(ref, summary);
   const [present, setPresent] = useState(!hidden);
   const previous = useRef(hidden);
   if (!hidden && !present) setPresent(true);

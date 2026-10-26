@@ -6,6 +6,7 @@
 - An open turn no longer draws that seam when a live-fold cell already summarises the same steps, and the previous body keeps its bottom spacing when the seam is omitted. Closed turns still show the seam. Thanks @sugar-syl (#73).
 - Add a display-only text transform seam (`dsh-better-display.text-transform`) so another plugin can rewrite reasoning and answer text before the reading reveal. The session, the transcript, and the fold stay on the original blocks. Copy still uses the original answer. An appended transform batch keeps the reveal going instead of starting it over. The `dsh-better-display.block` chain owner now also receives `presentation`, `holdFormatting`, and `liveText`. Thanks @lin636 (#62).
 - Honour a third-party `conversation.chat.node` replacement for `assistant-step` when its priority is below the official renderer. The reading view hands that renderer the answer body, so raw HTML cards from plugins such as `dsh-raw-html-v2` render inside Reader. Reasoning, folding, and process motion stay with Reader. That renderer receives the original segment text; the text transform runs only on the Reader markdown fallback (#65).
+- Keep the elapsed-time row and the closed process summary from painting over the answer heading when a third-party theme clears or fades `--dsw-alias-bg-base`, or raises `--dsh-content-font-size`. Sticky bands follow the measured row, stay at least 40px, and each Reader owns its own lane heights. A transparent or 10% token composites over `Canvas` (the page surface), not the text colour (#66).
 
 ## 0.3.8 — 2026-10-13
 
