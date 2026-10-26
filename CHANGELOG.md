@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.9 — 2026-10-27
 
 - Keep assistant narration visible. Collapsing process hides reasoning, tool calls and process records, and a compact seam between body blocks summarises the folded run (`思考×N · 工具×K · 记录×M`) and expands those rows in place. During a live turn, a later reasoning step folds each earlier reasoning/tool run in its own position, including across narration, without counting narration as `输出×N`. Thanks @Adamaik (#68).
 - An open turn no longer draws that seam when a live-fold cell already summarises the same steps, and the previous body keeps its bottom spacing when the seam is omitted. Closed turns still show the seam. Thanks @sugar-syl (#73).
