@@ -5,15 +5,15 @@ import type { ReactNode, RefObject } from 'react';
 import type { ChatConversationViewNode, ChatNode, ChatNodeKind, ChatNodeOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client';
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store';
 import { JsonBlock, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives';
-import { BlockBoundary, Blocks, contentBlocks, CopyAnswer, UserMessageActions } from './Blocks.js';
-import { ReasoningCard } from './ReasoningCard.js';
+import { BlockBoundary, Blocks, contentBlocks, UserMessageActions } from './Blocks.js';
+import { AssistantNode } from './AssistantNode.js';
 import { ToolActivity, ToolMedia } from './ToolActivity.js';
-import { OfficialActions, OfficialNode, OfficialTail } from './OfficialContent.js';
+import { OfficialNode, OfficialTail } from './OfficialContent.js';
 import { OFFICIAL_SEATS } from './official-slots.js';
 import { preparingLabel, readerFlow } from './tool-activity.js';
-import { Disclosure, ProcessFragment, RetiringContent, StatusText, useMotionAllowed, usePinnedSelection, useReadingScroll } from './motion.js';
+import { Disclosure, ProcessFragment, StatusText, useMotionAllowed, usePinnedSelection, useReadingScroll } from './motion.js';
 import { StreamMotionContext } from './streaming.js';
-import { assistantSegments, boundaryOf, forkAnchorSeq, groupNodes, hasProcessContent, hasVisibleBody, isEarlierNarration, processChoiceKey, processExpanded, terminalLabel } from './projection.js';
+import { boundaryOf, forkAnchorSeq, groupNodes, hasProcessContent, isEarlierNarration, processChoiceKey, processExpanded, terminalLabel } from './projection.js';
 import { basename, createProducedFileMentions, dirname, getTurnDeliverables, showDeliverablesRow } from './deliverables.js';
 import { deliverableOpenModeOf, type DeliverableOpenMode } from './open-file.js';
 import { asReadonlyArray, pendingSubmissionImages, type PendingSubmissionEcho } from './pending-submission.js';
@@ -170,52 +170,7 @@ const ProcessNode = memo(function ProcessNode({ useChat, t, nodeKey, open, motio
   return content && <ProcessFragment open={open} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey} framed>{content}</ProcessFragment>;
 });
 
-const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, processOpen = false, pinned = false, folded = false, partStart, motion, onRead, returnFocusTo, ...render }: SeatProps & {
-  motion: boolean; onRead: () => void; returnFocusTo: RefObject<HTMLButtonElement>; partStart?: number; folded?: boolean;
-}) {
-  const node = useChat(snapshot => snapshot.nodes.get(nodeKey));
-  if (!node || node.visibility === 'hidden' || !isNode(node, 'assistant-step')) return null;
-  const data = node.data;
-  const parts = assistantSegments(data.blocks);
-  const earlier = isEarlierNarration(data, boundary);
-  const hasToolCalls = data.blocks.some(block => block.kind === 'tool-call');
-  const isProcessStep = earlier || folded || hasToolCalls || (boundary.latestStep > 0 && data.step < boundary.latestStep);
-  const body = data.blocks.filter(block => block.kind !== 'reasoning' && block.kind !== 'tool-call');
-  const visible = partStart === undefined ? parts : parts.filter(part => part.start === partStart);
-  return <>{visible.map(part => {
-    const index = parts.findIndex(item => item.start === part.start);
-    const last = index === parts.length - 1;
-    return part.kind === 'reasoning'
-    ? <ProcessFragment key={part.start} open={processOpen} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey} framed>
-      <ReasoningCard step={data.step} active={processOpen && boundary.status === 'open' && data.step === boundary.latestStep} motion={motion} selected={pinned} onRead={onRead}>
-        <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running' && last && data.blocks.at(-1)?.kind === 'reasoning'}
-          holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
-      </ReasoningCard>
-    </ProcessFragment>
-    : isProcessStep ? <ProcessFragment key={part.start} open={processOpen} motion={motion} onRead={onRead} returnFocusTo={returnFocusTo} nodeKey={nodeKey}>
-      <article className={css.processCommentary}>
-        <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running'} holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
-      </article>
-    </ProcessFragment>
-    : hasVisibleBody(part.blocks) && <RetiringContent key={part.start} visible={pinned || processOpen || (!earlier && !folded)}>
-      <article className={css.answer} data-reader-answer data-reader-anchor data-reader-key={nodeKey} data-reader-source-start={part.start} data-answer-status={data.status} data-answer-phase={earlier || folded ? 'process' : 'body'}>
-        <Blocks {...render} blocks={part.blocks} streaming={data.status === 'running'} holdFormatting={pinned} startedAt={data.time} interrupted={data.status === 'interrupted'} liveText />
-        {last && data.status === 'interrupted' && <span className={css.stopped}>已停止</span>}
-        {last && !earlier && !folded && data.status !== 'running' && boundary.status === 'closed' && (
-          <CopyAnswer blocks={body} onFork={(() => {
-            // The fork anchor must be the durable closing message seq (same as
-            // the official turn-tail branch). AssistantChatData carries no seq
-            // of its own; passing it would fork the whole session instead.
-            const anchor = forkAnchorSeq([data.finalNode, { seq: render.forkSeq }]);
-            return render.forkAt && anchor !== undefined ? () => render.forkAt!(anchor) : undefined;
-          })()} metrics={render.metrics} extraActions={<OfficialActions official={render.official} messageId={data.finalNode?.messageId} />} />
-        )}
-      </article>
-    </RetiringContent>;
-  })}</>;
-});
-
-const MainNode = memo(function MainNode({ useChat, nodeKey, boundary, pinned, processOpen = false, ...render }: SeatProps) {
+const MainNode = memo(function MainNode({ useChat, nodeKey, boundary, pinned, processOpen: _processOpen = false, ...render }: SeatProps) {
   const node = useChat(snapshot => snapshot.nodes.get(nodeKey));
   const [disclosureReset] = useState(() => createSnapshotStore(0));
   if (!node || node.visibility === 'hidden') return null;
@@ -322,7 +277,7 @@ function subagentCount(snapshot: { nodes: { get(key: string): ChatConversationVi
   return 0;
 }
 
-function GroupStatus({ group, sessionId, useChat, pending, motion }: Pick<ReaderProps, 'sessionId' | 'useChat'> & { group: ReaderGroup; motion: boolean; pending: { kind?: string } | undefined }) {
+function GroupStatus({ group, sessionId: _sessionId, useChat, pending, motion }: Pick<ReaderProps, 'sessionId' | 'useChat'> & { group: ReaderGroup; motion: boolean; pending: { kind?: string } | undefined }) {
   const text = useChat(snapshot => {
     const turn = group.turn === null ? undefined : snapshot.timeline.turns.get(group.turn);
     if (turn?.status === 'closed') {
@@ -916,7 +871,7 @@ export function Reader(props: ReaderProps) {
          const submission = 'requestId' in item ? item : undefined;
          const text = submission?.text ?? inboxText(item as PendingInboxItem);
          const images = submission ? pendingSubmissionImages(submission) : [];
-         const attachmentCount = images.length;
+         const attachmentCount = submission ? images.length : inboxAttachmentCount(item as PendingInboxItem);
         const requestId = submission?.requestId ?? `inbox-${index}`;
         return (
         <div key={requestId} className={css.userCluster} data-reader-pending-submission data-pending-steering={submission ? undefined : ''} data-pending-attachment-count={attachmentCount}>

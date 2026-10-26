@@ -22,9 +22,9 @@ dsh plugin --profile web add github:aa2246740/dsh-better-display#v0.3.6
 
 这条官方 CLI 命令只写入 `web` profile，不能修改 Desktop App 的 profile。本机 PATH 上需要有 **pnpm**。对于已经运行的 Web Host，请重新打开该 Host 一次，再刷新网页；插件 bundle 会在启动时读取。
 
-给 DeepSeek Harness 加一个 **阅读** 页签：执行时能看到步骤、思考和进度；整轮成功结束后把过程收起来，留下最终回答。原版「对话 / 轨迹」、输入框、模型选择、工具和审批都还在。阅读列保留宿主 ChatView 的 `data-chat-flow` 钩子，依赖该标记显示输入框的第三方皮肤不会把阅读页当成仅检视视图。
+给 DeepSeek Harness 加一个 **阅读** 页签：执行时能看到步骤、思考和进度；整轮成功结束后把过程收起来，留下最终回答。原版「对话 / 轨迹」、输入框、模型选择、工具和审批都还在。阅读列保留宿主 ChatView 的 `data-chat-flow` 钩子，依赖该标记显示输入框的第三方皮肤不会把阅读页当成仅检视视图。若另一个插件用低于官方的 priority 替换了 `assistant-step`（例如 `dsh-raw-html-v2` 渲染 `<div id="vcp-root">` 卡片），阅读页把回答正文交给它，思考、折叠和过程动效仍由阅读页负责。详见 [官方能力接入说明](docs/official-rendering-bridge.md)。
 
-最终回答里的 ````mcp-app` 代码块会在阅读视图里挂成交互卡片，跑在 `<iframe sandbox="allow-scripts allow-forms">` 里，没有 `allow-same-origin`。卡片可以通过 JSON-RPC 把下一轮 prompt 填进输入框。技能包在 [`skills/generative-mcpapps/`](skills/generative-mcpapps/)。设置里的 **Better Display** 可把产物改为右侧栏预览（默认仍用系统应用），打开半透明毛玻璃（默认关），设置过程自动折叠开关（默认开），并检测该技能是否已装进宿主技能目录。
+最终回答里的 ````mcp-app`代码块会在阅读视图里挂成交互卡片，跑在`<iframe sandbox="allow-scripts allow-forms">`里，没有`allow-same-origin`。卡片可以通过 JSON-RPC 把下一轮 prompt 填进输入框。技能包在 [`skills/generative-mcpapps/`](skills/generative-mcpapps/)。设置里的 **Better Display** 可把产物改为右侧栏预览（默认仍用系统应用），打开半透明毛玻璃（默认关），设置过程自动折叠开关（默认开），并检测该技能是否已装进宿主技能目录。
 
 面向 DeepSeek Harness **0.2.0-rc.2**（`dsh-v0.2.0-rc.2`）。只改展示，不改 Agent 执行、SDK 或模型凭据。Node.js `^22.19.0 || >=24`。新会话默认进阅读。`@deepseek-ai/dsh-*` peer 范围是 `>=0.2.0-rc.1 <0.2.1`：接受 `0.2.0-rc.2` 和稳定版 `0.2.0`，拒绝 `0.2.0` alpha，也拒绝 `0.1.7-rc.2`。
 

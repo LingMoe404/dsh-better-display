@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Honour a third-party `conversation.chat.node` replacement for `assistant-step` when its priority is below the official renderer. The reading view hands that renderer the answer body, so raw HTML cards from plugins such as `dsh-raw-html-v2` render inside Reader. Reasoning, folding, and process motion stay with Reader (#65).
+
 ## 0.3.8 — 2026-10-13
 
 - Fix host entry bundling in tsdown: stop externalising relative host imports and add a portable output build guard to prevent missing bundled modules (`ERR_MODULE_NOT_FOUND ./skill-roots.ts`, #58, #59, #61).
