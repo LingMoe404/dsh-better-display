@@ -10,13 +10,13 @@
 
 ## 代码归属
 
-| 模块 | 负责什么 |
-| --- | --- |
-| `official-slots.tsx` | 用公开注册表 API 将官方注册信息映射到 Reader 的独立插槽；保留注入、locale、store、selector 和子插槽。监听贡献增删，逐条挂载和释放。 |
-| `OfficialContent.tsx` | 将回答身份、工具、节点和产物上下文传给官方控件。这里只组合，不处理业务请求。 |
-| `Reader.tsx`、`ToolActivity.tsx` | 原有阅读布局、过程组织、摘要和交互。工具详情里的控件采用官方形式。 |
-| `platform-media.ts` | RC2 的本地媒体 URL 约定；读取授权仍由 Host 文件 API 负责。 |
-| `compat/harness-rc2.json` | 已验收的官方接口、被自有展示覆盖的实现和注册清单基线。 |
+| 模块                             | 负责什么                                                                                                                            |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `official-slots.tsx`             | 用公开注册表 API 将官方注册信息映射到 Reader 的独立插槽；保留注入、locale、store、selector 和子插槽。监听贡献增删，逐条挂载和释放。 |
+| `OfficialContent.tsx`            | 将回答身份、工具、节点和产物上下文传给官方控件。这里只组合，不处理业务请求。                                                        |
+| `Reader.tsx`、`ToolActivity.tsx` | 原有阅读布局、过程组织、摘要和交互。工具详情里的控件采用官方形式。                                                                  |
+| `platform-media.ts`              | RC2 的本地媒体 URL 约定；读取授权仍由 Host 文件 API 负责。                                                                          |
+| `compat/harness-rc2.json`        | 已验收的官方接口、被自有展示覆盖的实现和注册清单基线。                                                                              |
 
 ## 为什么有插槽映射
 
@@ -28,16 +28,17 @@ RC2 的一个子插槽只能有一个声明者，只有声明它的组件能获�
 
 ## 这版覆盖的能力
 
-| 能力 | 处理方式 |
-| --- | --- |
-| 回答操作、反馈 | 官方 `conversation.chat.assistant-actions`，使用持久化 messageId；中断的临时片段不伪造身份。 |
-| 工具详情 | 官方 `tool.call.toolview`，包括 memo、注入状态、翻译和递归子插槽；未注册的工具保留原有结果预览。 |
-| 显式 `present` 产物 | 官方 turnTail 中的文件卡片和菜单，保留官方状态和打开操作。 |
-| 已修改文件快捷操作 | 保持原 Reader 的复制、定位和打开模式；仅从 Reader 的官方 tail 展示参数中排除重复的 produced chips，不改变官方源数据。未知匹配结构原样呈现。 |
-| 文件行号和正文文件链接 | 保留工具传来的行号；正文优先采用官方 file-mention 服务，现有路径匹配作为补充。 |
-| 本地 Markdown 图片 | 和 RC2 相同的同源文件 API，加载失败保留替代文本，危险协议不直接渲染。 |
-| 用户与 steering 消息 | 镜像 `conversation.chat.node` 的 keyed renderer，保留 `sessionId`、turn hook 和 Reader 跳转属性；未注册对应 key 时通过插槽 `fallback` 呈现 Reader 气泡。renderer 主动返回 `null` 时不补画气泡。 |
-| 命令、新节点类型 | 接入官方节点渲染及其子插槽；无可用渲染器时保留记录并提供“在对话中查看”。 |
+| 能力                         | 处理方式                                                                                                                                                                                                              |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 回答操作、反馈               | 官方 `conversation.chat.assistant-actions`，使用持久化 messageId；中断的临时片段不伪造身份。                                                                                                                          |
+| 工具详情                     | 官方 `tool.call.toolview`，包括 memo、注入状态、翻译和递归子插槽；未注册的工具保留原有结果预览。                                                                                                                      |
+| 显式 `present` 产物          | 官方 turnTail 中的文件卡片和菜单，保留官方状态和打开操作。                                                                                                                                                            |
+| 已修改文件快捷操作           | 保持原 Reader 的复制、定位和打开模式；仅从 Reader 的官方 tail 展示参数中排除重复的 produced chips，不改变官方源数据。未知匹配结构原样呈现。                                                                           |
+| 文件行号和正文文件链接       | 保留工具传来的行号；正文优先采用官方 file-mention 服务，现有路径匹配作为补充。                                                                                                                                        |
+| 本地 Markdown 图片           | 和 RC2 相同的同源文件 API，加载失败保留替代文本，危险协议不直接渲染。                                                                                                                                                 |
+| 用户与 steering 消息         | 镜像 `conversation.chat.node` 的 keyed renderer，保留 `sessionId`、turn hook 和 Reader 跳转属性；未注册对应 key 时通过插槽 `fallback` 呈现 Reader 气泡。renderer 主动返回 `null` 时不补画气泡。                       |
+| 回答正文上的第三方替换渲染器 | 只镜像 priority 低于官方 `assistant-step`（priority 0）的注册。正文段交给该渲染器，`groupPart` 为 `response`，blocks 只有这一段。思考、折叠、动效和回答外框仍由 Reader 绘制。没有这类注册时正文仍走 Reader Markdown。 |
+| 命令、新节点类型             | 接入官方节点渲染及其子插槽；无可用渲染器时保留记录并提供“在对话中查看”。                                                                                                                                              |
 
 阅读布局、折叠、逐字动效、阅读速度、默认设置保持现版。移除了未被使用的全局 `body.dataset.readerFolding` 写入。
 
@@ -74,8 +75,22 @@ DSH_EASYREWRITE_CLIENT=/path/to/package/lib/client.js \
 
 该 fixture 不执行撤回提交。完整验收仍需在独立测试会话中打开 Reader，确认每条 user 消息只有一个气泡与撤回按钮；点击撤回并确认后检查输入框回填、取消恢复、发送后的真实历史回退，再切换到原对话检查一致性。另需用 steering 消息和历史跳转检查补充消息与锚点。
 
+## 第三方 assistant-step 替换渲染器
+
+Reader 自己画 `assistant-step`。思考卡片、过程折叠、逐字动效和回答栏留在阅读页，所以官方 priority 0 的 `AssistantNodeView` 不会再挂进阅读座位。挂进去的话，正文会被官方组件整段换掉。
+
+Keyed 槽位里 priority 更小的注册胜出。priority 小于 0 的 `assistant-step` 注册就是在替换官方渲染器。`dsh-raw-html-v2@0.8.0` 用 priority `-10` 注册 `VcpSlotGuard`，遍历 `node.data.blocks`，把 text 块切成 Markdown 和 `<div id="vcp-root">` 卡片。阅读页只镜像这种替换，座位仍是 `dsh-better-display.official.nodes/conversation.chat.node`。`tool-call`、`turn-tail`、`turn-process` 继续不镜像。
+
+每个正文段单独交给胜出的替换渲染器。传过去的 node 保留原来的身份、`status` 和 `step`，`data.blocks` 只有这一段的正文块，并带 `groupPart: 'response'`，和宿主把思考与回答拆开的方式一致。思考段仍走阅读页的 `ReasoningCard`。折叠、吸顶、复制和回答外框也不交给替换渲染器。
+
+没有这类注册时，`renderSlot` 的 fallback 仍是阅读页自己的 Markdown。替换渲染器返回 `null` 时不补画第二份正文。它卸下之后，下一次 reconcile 回到 Markdown。
+
+这里不解析某一种卡片协议，也不改会话数据。原始 HTML、代码围栏和流式切段仍由那个插件自己的渲染器处理。阅读页保证的是：这个渲染器能在回答正文里运行。启用替换渲染器时，正文不再走阅读页的逐字动效；思考和折叠动效保持不变。替换渲染器若自己再画一份「已中断」，会和阅读页的「已停止」叠在一起，这是该渲染器的展示，不另做裁剪。
+
+`tests/official-slots.test.ts` 锁定「priority 低于 0 才镜像，官方 priority 与 tool-call 不镜像」。`tests/fixtures/reader-official-users.tsx` 在真实 Reader 里渲染一条带思考和 `<div id="vcp-root">` 的 assistant-step：替换渲染器收到 `groupPart: 'response'` 和正文块，思考文本留在 `data-reader-text-kind="reasoning"`，回答栏里不再出现 Markdown 代码块。
+
 ## 后续仍需完成
 
-Markdown 定制仍保留逐字动效和 MCP 展示钩子，官方公共组件还没有对应的注入接口。上下文行、部分过程展示和工具摘要也仍有自有实现。本分支先建立官方能力的完整运行路径，后续按视觉基线逐模块收敛这些副本，并拆分 Reader 的阅读策略与动画执行。不能据此承诺所有未来版本零维护，也不承诺任意第三方插件兼容。
+Markdown 定制仍保留逐字动效和 MCP 展示钩子，官方公共组件还没有对应的注入接口。上下文行、部分过程展示和工具摘要也仍有自有实现。本分支先建立官方能力的完整运行路径，后续按视觉基线逐模块收敛这些副本，并拆分 Reader 的阅读策略与动画执行。不能据此承诺所有未来版本零维护。上面的 assistant-step 替换渲染器是已承诺的共存方式；除此之外不承诺任意第三方插件的视觉兼容。
 
 已有客户端通过 HMR 更新时，无需新增 Host 或改写会话数据；应先核对实际安装来源、构建产物和同页行为。正式版本保留 Git 标签及发布包，便于按版本安装和回退。

@@ -22,7 +22,7 @@ dsh plugin --profile web add github:aa2246740/dsh-better-display#v0.3.6
 
 这条官方 CLI 命令只写入 `web` profile，不能修改 Desktop App 的 profile。本机 PATH 上需要有 **pnpm**。对于已经运行的 Web Host，请重新打开该 Host 一次，再刷新网页；插件 bundle 会在启动时读取。
 
-给 DeepSeek Harness 加一个 **阅读** 页签：执行时能看到步骤、思考和进度；整轮成功结束后把过程收起来，留下最终回答。原版「对话 / 轨迹」、输入框、模型选择、工具和审批都还在。阅读列保留宿主 ChatView 的 `data-chat-flow` 钩子，依赖该标记显示输入框的第三方皮肤不会把阅读页当成仅检视视图。
+给 DeepSeek Harness 加一个 **阅读** 页签：执行时能看到步骤、思考和进度；整轮成功结束后把过程收起来，留下最终回答。原版「对话 / 轨迹」、输入框、模型选择、工具和审批都还在。阅读列保留宿主 ChatView 的 `data-chat-flow` 钩子，依赖该标记显示输入框的第三方皮肤不会把阅读页当成仅检视视图。若另一个插件用低于官方的 priority 替换了 `assistant-step`（例如 `dsh-raw-html-v2` 渲染 `<div id="vcp-root">` 卡片），阅读页把回答正文交给它，思考、折叠和过程动效仍由阅读页负责。详见 [官方能力接入说明](docs/official-rendering-bridge.md)。
 
 另一个插件可以在展示层改写思考和回答（例如翻译），阅读页仍负责浮现、跟随和折叠。复制的是原文，会话记录不变。契约和最小例子见 [扩展点](docs/extension-points.md)。
 

@@ -130,6 +130,70 @@ async function verify() {
       assert.equal(count(html, 'user content'), 1);
       assert.equal(count(html, 'steering content'), 1);
       assert.equal(count(html, 'Official recall'), 0);
+
+      // A priority below the official assistant renderer is a replacement.
+      // Reader keeps the reasoning card and hands only the body blocks over.
+      const assistant = {
+        key: 'assistant-key', kind: 'assistant-step', anchorSeq: 4, visibility: 'visible',
+        location: { kind: 'turn', turn },
+        data: {
+          status: 'settled', turn: 1, step: 0, time: 3,
+          blocks: [
+            { kind: 'reasoning', text: 'think privately' },
+            { kind: 'text', text: '<div id="vcp-root">card face</div>' },
+          ],
+        },
+      };
+      // Reader memoizes on the order array and the nodes map. A real host
+      // publishes new references; this fixture has to do the same.
+      chat.nodes = new Map(chat.nodes);
+      chat.nodes.set('assistant-key', assistant);
+      chat.order = [...chat.order, 'assistant-key'];
+      store.actions.setExpanded('turn:1:closed:completed', true);
+      html = render();
+      assert.equal(count(html, 'data-foreign-assistant'), 0);
+      assert.ok(html.includes('vcp-root'));
+      assert.ok(html.includes('think privately'));
+      const calls: Array<{ groupPart: unknown; kinds: string[]; text: string }> = [];
+      const Foreign = (props: { groupPart?: unknown; node?: { data?: { blocks?: Array<{ kind: string; text?: string }> } } }) => {
+        const blocks = props.node?.data?.blocks ?? [];
+        calls.push({
+          groupPart: props.groupPart,
+          kinds: blocks.map(block => block.kind),
+          text: blocks.map(block => block.text ?? '').join('\n'),
+        });
+        const body = blocks.filter(block => block.kind === 'text').map(block => block.text ?? '').join('\n');
+        return <div data-foreign-assistant>{body}</div>;
+      };
+      const removeOfficialAssistant = slots.register({ name: 'conversation.chat.node', key: 'assistant-step' }, () => <span>Official assistant</span>);
+      const removeForeign = slots.register({ name: 'conversation.chat.node', key: 'assistant-step', priority: -10 }, Foreign);
+      await new Promise(resolve => queueMicrotask(resolve));
+      assert.ok(slots.entriesOfSlot(OFFICIAL_SEATS.nodes).some((entry: { options: { key?: string; priority?: number } }) => entry.options.key === 'assistant-step' && entry.options.priority === -10));
+      html = render();
+      const answer = container.querySelector('[data-reader-body]');
+      assert.ok(answer);
+      assert.equal(answer!.querySelectorAll('[data-foreign-assistant]').length, 1);
+      assert.ok(answer!.textContent?.includes('<div id="vcp-root">card face</div>'));
+      assert.equal(answer!.querySelectorAll('pre').length, 0);
+      assert.equal(count(html, 'Official assistant'), 0);
+      assert.ok(calls.some(call => call.groupPart === 'response' && call.kinds.join(',') === 'text' && call.text.includes('vcp-root')));
+      assert.ok(calls.every(call => !call.kinds.includes('reasoning')));
+      const reasoning = container.querySelector('[data-reader-text-kind="reasoning"]');
+      assert.ok(reasoning);
+      assert.ok(reasoning!.textContent?.includes('think privately'));
+      assert.equal(reasoning!.querySelectorAll('[data-foreign-assistant]').length, 0);
+      removeForeign();
+      removeOfficialAssistant();
+      await new Promise(resolve => queueMicrotask(resolve));
+      html = render();
+      assert.equal(count(html, 'data-foreign-assistant'), 0);
+      assert.ok(html.includes('vcp-root'));
+      assert.ok(html.includes('think privately'));
+      chat.nodes = new Map(chat.nodes);
+      chat.nodes.delete('assistant-key');
+      chat.order = chat.order.filter((key: string) => key !== 'assistant-key');
+      store.actions.setExpanded('turn:1:closed:completed', false);
+
       const module = Reflect.get(window, 'easyrewriteModule');
       if (module) {
         const plugin = module.factory((name: string) => {

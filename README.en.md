@@ -22,7 +22,7 @@ dsh plugin --profile web add github:aa2246740/dsh-better-display#v0.3.6
 
 This official CLI command writes only the `web` profile; it cannot modify the Desktop App profile. **pnpm** must be on PATH. For an already-running Web Host, reopen that Host once and reload the page because bundles are read at boot.
 
-Adds a **阅读** tab to DeepSeek Harness. While a turn runs you see steps, thinking, and progress. After a successful turn those collapse and the final answer stays. Native Chat / Trajectory, the composer, model picker, tools, and approvals stay. The reading column keeps ChatView's `data-chat-flow` hook so third-party skins that gate the composer on that mark still treat Reader as an interactive conversation.
+Adds a **阅读** tab to DeepSeek Harness. While a turn runs you see steps, thinking, and progress. After a successful turn those collapse and the final answer stays. Native Chat / Trajectory, the composer, model picker, tools, and approvals stay. The reading column keeps ChatView's `data-chat-flow` hook so third-party skins that gate the composer on that mark still treat Reader as an interactive conversation. When another plugin replaces `assistant-step` at a priority below the official renderer (for example `dsh-raw-html-v2` drawing `<div id="vcp-root">` cards), Reader gives it the answer body and keeps reasoning, folding, and process motion. See the [official integration notes](docs/official-rendering-bridge.md).
 
 Another plugin can rewrite reasoning and answer text for display only, for example to translate them. The reader still owns the reveal, follow-scroll, and fold. Copy uses the original text, and the session record is unchanged. The contract and a minimal plugin are in [extension points](docs/extension-points.md).
 

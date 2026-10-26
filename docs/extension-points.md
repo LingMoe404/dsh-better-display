@@ -49,6 +49,8 @@ Copy answer and copy message read the original blocks (`originalAnswerText` for 
 
 Fold still uses the original block list and the public turn boundary.
 
+A foreign `assistant-step` renderer receives original text. That is a `conversation.chat.node` replacement whose priority is below the official renderer. Reader hands it the segment's original blocks and does not run this transform on that path. Reader markdown, including this transform, is only the fallback when the foreign renderer returns null. Reasoning stays on the reading card either way.
+
 Import the types from `dsh-better-display/client`:
 
 ```ts

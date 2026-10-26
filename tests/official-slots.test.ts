@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import { memo } from 'react';
 import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots';
-import { mirrorOfficialSlot, readerTailMatch, type CompositionRegistry } from '../src/client/official-slots.js';
+import { acceptMirroredChatNode, mirrorOfficialSlot, readerTailMatch, type CompositionRegistry } from '../src/client/official-slots.js';
 
 function registry(kind: 'keyed' | 'chain' | 'list' = 'keyed') {
   const core = new SlotCore();
@@ -94,6 +94,45 @@ test('new registrations do not remount existing cards; winner changes and unload
   register({ name: 'source', key: 'after-reader-unload' }, second);
   await changed();
   assert.equal(core.entriesOfSlot('reader').length, 0);
+});
+
+test('a lower-priority assistant-step replacement is mirrored and the official renderer is not', () => {
+  const { core, slots, register } = registry();
+  const official = memo(() => null);
+  const foreign = memo(() => null);
+  const tool = memo(() => null);
+  const user = memo(() => null);
+  register({ name: 'source', key: 'assistant-step' }, official);
+  register({ name: 'source', key: 'assistant-step', priority: -10 }, foreign);
+  register({ name: 'source', key: 'tool-call', priority: -10 }, tool);
+  register({ name: 'source', key: 'turn-process' }, memo(() => null));
+  register({ name: 'source', key: 'user' }, user);
+  const winner = core.entriesOfSlot('source').find(entry => entry.options.key === 'assistant-step');
+  assert.ok(winner);
+  assert.equal(acceptMirroredChatNode(winner), true);
+  assert.equal(winner.component, foreign);
+  const stop = mirrorOfficialSlot(slots, 'source', 'reader', 'reader.children', acceptMirroredChatNode);
+  const mirrored = core.entriesOfSlot('reader');
+  assert.deepEqual(mirrored.map(entry => entry.options.key).sort(), ['assistant-step', 'user']);
+  assert.equal(mirrored.find(entry => entry.options.key === 'assistant-step')?.component, foreign);
+  assert.equal(mirrored.find(entry => entry.options.key === 'assistant-step')?.options.priority, -10);
+  assert.equal(mirrored.some(entry => entry.component === official || entry.component === tool), false);
+  stop();
+  assert.equal(core.entriesOfSlot('reader').length, 0);
+  assert.equal(core.entriesOfSlot('source').find(entry => entry.options.key === 'assistant-step')?.component, foreign);
+});
+
+test('the official assistant-step priority stays on the source slot', () => {
+  const { core, slots, register } = registry();
+  const official = memo(() => null);
+  register({ name: 'source', key: 'assistant-step', priority: 0 }, official);
+  const entry = core.entriesOfSlot('source')[0];
+  assert.ok(entry);
+  assert.equal(acceptMirroredChatNode(entry), false);
+  const stop = mirrorOfficialSlot(slots, 'source', 'reader', 'reader.children', acceptMirroredChatNode);
+  assert.equal(core.entriesOfSlot('reader').length, 0);
+  assert.equal(core.entriesOfSlot('source')[0]?.component, official);
+  stop();
 });
 
 test('partial setup rolls back its own registrations on a nested contract failure', () => {
