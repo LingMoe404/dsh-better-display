@@ -44,7 +44,6 @@ export const McpAppFrame = memo(function McpAppFrame({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const lastParamsRef = useRef<Record<string, unknown>>({});
   const [height, setHeight] = useState(() => Math.max(60, Math.min(2400, initialHeight)));
-  const [ready, setReady] = useState(false);
   const [receipt, setReceipt] = useState<string | null>(null);
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -81,7 +80,7 @@ export const McpAppFrame = memo(function McpAppFrame({
 
   const handleUserSubmit = useCallback((params: Record<string, unknown>) => {
     lastParamsRef.current = params;
-    let summary = '';
+    let summary: string;
     if (typeof params.choice === 'string') {
       const desc = typeof params.desc === 'string' ? ` (${params.desc})` : '';
       summary = `选择: ${params.choice}${desc}`;
@@ -127,17 +126,10 @@ export const McpAppFrame = memo(function McpAppFrame({
           },
         };
         iframe.contentWindow?.postMessage(response, '*');
-        setReady(true);
         return;
       }
 
-      // 2. ui/ready or initialized notification
-      if (data.method === 'ui/ready' || data.method === 'ui/notifications/initialized') {
-        setReady(true);
-        return;
-      }
-
-      // 3. ui/resize
+      // ui/resize
       if (data.method === 'ui/resize' && data.params?.height) {
         const h = Number(data.params.height);
         if (Number.isFinite(h) && h > 0) {
@@ -146,7 +138,7 @@ export const McpAppFrame = memo(function McpAppFrame({
         return;
       }
 
-      // 4. ui/submit or ui/update-model-context
+      // ui/submit or ui/update-model-context
       if (data.method === 'ui/submit' || data.method === 'ui/update-model-context') {
         const params = (data.params as Record<string, unknown>) || {};
         handleUserSubmit(params);
@@ -209,13 +201,10 @@ export const McpAppFrame = memo(function McpAppFrame({
         },
       },
     }, '*');
-
-    setReady(true);
   }, []);
 
   const handleReload = useCallback(() => {
     setReloadNonce(n => n + 1);
-    setReady(false);
     setReceipt(null);
   }, []);
 
