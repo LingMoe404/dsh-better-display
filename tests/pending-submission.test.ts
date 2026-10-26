@@ -35,6 +35,17 @@ test('pendingSubmissions that is not an array is treated as empty', () => {
   assert.deepEqual(asReadonlyArray([{ requestId: 'a' }]), [{ requestId: 'a' }]);
 });
 
+test('pending submission bubble keeps the host font metrics', () => {
+  const source = readFileSync(resolve(root, 'src/client/Reader.tsx'), 'utf8');
+  const css = readFileSync(resolve(root, 'src/client/Reader.module.css'), 'utf8');
+  assert.match(source, /data-reader-pending-submission[\s\S]*className=\{css\.user\}/);
+  const user = css.match(/\.user\s*\{[^}]*\}/)?.[0] ?? '';
+  assert.match(user, /font-size:\s*var\(--dsh-content-font-size,\s*14px\)/);
+  assert.match(user, /line-height:\s*calc\(22px \+ var\(--dsh-content-font-delta,\s*0px\)\)/);
+  assert.match(user, /font-weight:\s*400/);
+  assert.match(user, /white-space:\s*pre-wrap/);
+});
+
 test('Reader and committed client bundle do not read unguarded submission.images.length', () => {
   const source = readFileSync(resolve(root, 'src/client/Reader.tsx'), 'utf8');
   assert.match(source, /pendingSubmissionImages/);

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Reader user bubbles use the host width `min(calc(var(--dsh-chat-content-width, 748px) * 0.702), 82%)`. `.userCluster` was `align-self: flex-end` with no definite width, so it shrank to the text and the host `.userStack` `82%` resolved against that shrink-wrap (#74).
+- Pending submission bubbles use the host 14px/22px font metrics, radius, and pre-wrap, so they no longer jump in size or weight when the official bubble replaces them (#74).
+
 ## 0.3.8 — 2026-10-13
 
 - Fix host entry bundling in tsdown: stop externalising relative host imports and add a portable output build guard to prevent missing bundled modules (`ERR_MODULE_NOT_FOUND ./skill-roots.ts`, #58, #59, #61).

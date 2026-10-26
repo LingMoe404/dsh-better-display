@@ -46,3 +46,23 @@ test('CSS is cached after module injection and restored before mount layout effe
   assert.match(index, /\nensureStyles\(\);/);
   assert.match(reader, /useInsertionEffect\(\(\) => \{ ensureStyles\(\); \}, \[\]\)/);
 });
+
+test('user cluster width is the host formula, not a shrink-wrapped max-width', () => {
+  const css = readFileSync(new URL('../src/client/Reader.module.css', import.meta.url), 'utf8');
+  const cluster = css.match(/\.userCluster\s*\{[^}]*\}/)?.[0] ?? '';
+  assert.match(cluster, /width:\s*min\(calc\(var\(--dsh-chat-content-width,\s*748px\)\s*\*\s*0\.702\),\s*82%\)/);
+  assert.match(cluster, /max-width:\s*100%/);
+  assert.doesNotMatch(cluster, /525px/);
+  assert.doesNotMatch(css, /525px/);
+  // A direct-child cap misses the display:contents slot and would replace the
+  // host .userStack max-width with 100% of a fit-content box.
+  assert.doesNotMatch(css, /\.userCluster\s*>\s*\*/);
+  assert.match(css, /\.userCluster \[data-slot="conversation\.chat\.node"\] > \*,\s*\.userCluster \[data-slot="conversation\.chat\.node"\] > \* > \* \{ max-width: 100%; \}/);
+  const user = css.match(/\.user\s*\{[^}]*\}/)?.[0] ?? '';
+  assert.match(user, /font-size:\s*var\(--dsh-content-font-size,\s*14px\)/);
+  assert.match(user, /line-height:\s*calc\(22px \+ var\(--dsh-content-font-delta,\s*0px\)\)/);
+  assert.match(user, /font-weight:\s*400/);
+  assert.match(user, /white-space:\s*pre-wrap/);
+  assert.match(user, /border-radius:\s*var\(--dsw-radius-xl,\s*22px\)/);
+  assert.doesNotMatch(css, /\.user\s*\{\s*max-width:\s*90%/);
+});
