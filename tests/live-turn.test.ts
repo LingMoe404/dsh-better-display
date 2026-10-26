@@ -4,7 +4,7 @@ import type { AssistantChatData, ChatConversationViewNode } from '@deepseek-ai/d
 import type { AssistantBlock, TurnLocation } from '@deepseek-ai/dsh-client-ui-conversation/client';
 import { assistantSegments, processExpanded } from '../src/client/projection.ts';
 import type { TurnBoundary } from '../src/client/projection.ts';
-import { presentLiveTurn, segmentLiveTurn } from '../src/client/live-turn.ts';
+import { planProcessSeams, presentLiveTurn, segmentLiveTurn } from '../src/client/live-turn.ts';
 import type { LiveStep } from '../src/client/live-turn.ts';
 import { readerFlow } from '../src/client/tool-activity.ts';
 
@@ -22,6 +22,9 @@ function tool(id: string): LiveStep {
 }
 function user(id: string): LiveStep {
   return { kind: 'user', key: id, nodeKey: id };
+}
+function other(id: string): LiveStep {
+  return { kind: 'other', key: id, nodeKey: id };
 }
 
 function kinds(items: ReturnType<typeof presentLiveTurn>) {
@@ -241,4 +244,46 @@ test('disabling auto-fold keeps all steps open as plain streaming steps', () => 
   assert.equal(items.some(item => item.kind === 'fold'), false);
   assert.deepEqual(items.map(item => item.key), ['1', '2', '3', '4', '5', '6']);
   assert.deepEqual(items.map(item => item.kind), ['open', 'open', 'open', 'open', 'open', 'open']);
+});
+
+/** Issue #73: body, then a process run, then another body, then a later reasoning. */
+function issue73Steps(): LiveStep[] {
+  return [
+    body('body1'),
+    reasoning('r1'), reasoning('r2'),
+    tool('t1'), tool('t2'), tool('t3'),
+    other('rec1'),
+    body('body2'),
+    reasoning('rLatest'),
+  ];
+}
+
+test('open turn does not seam a run the live fold already summarises (#73)', () => {
+  const steps = issue73Steps();
+  const live = presentLiveTurn(steps, open, true);
+  const folds = live.filter(item => item.kind === 'fold');
+  assert.equal(folds.length, 1);
+  if (folds[0]?.kind !== 'fold') throw new Error('missing live fold');
+  assert.equal(folds[0].summary, '思考×2 · 工具×3 · 记录×1');
+  assert.deepEqual(folds[0].steps.map(step => step.key), ['r1', 'r2', 't1', 't2', 't3', 'rec1']);
+
+  const seams = planProcessSeams(steps, live, false);
+  assert.equal(seams.before.has('body2'), false);
+  assert.equal(seams.after.has('body1'), false);
+  assert.equal(seams.before.size, 0);
+  assert.equal(seams.after.size, 0);
+});
+
+test('closed turn keeps the seam between narration blocks and the previous body spacing (#73)', () => {
+  const steps = issue73Steps();
+  const live = presentLiveTurn(steps, completed, true);
+  assert.equal(live.some(item => item.kind === 'fold'), false);
+
+  const seams = planProcessSeams(steps, live, false);
+  assert.equal(seams.before.get('body2'), '思考×2 · 工具×3 · 记录×1');
+  assert.equal(seams.after.has('body1'), true);
+
+  const expanded = planProcessSeams(steps, live, true);
+  assert.equal(expanded.before.size, 0);
+  assert.equal(expanded.after.size, 0);
 });

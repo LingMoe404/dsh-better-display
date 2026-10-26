@@ -2,7 +2,6 @@ import type { AssistantChatData, ChatConversationViewNode } from '@deepseek-ai/d
 import type { AssistantBlock } from '@deepseek-ai/dsh-client-ui-conversation/client';
 import { assistantSegments, hasVisibleBody } from './projection.js';
 import type { TurnBoundary } from './projection.js';
-import { activitySummary, stringValue } from './tool-activity.js';
 import type { ReaderFlowEntry, ToolActivityEntry } from './tool-activity.js';
 
 export type LiveStep =
@@ -114,48 +113,6 @@ export function segmentLiveTurn(
   return steps;
 }
 
-/** One finished tool call, described by what it actually did. */
-function toolSummary(entry: ToolActivityEntry): string {
-  const info = activitySummary(entry);
-  const clip = (value: string | undefined, max = 38): string | undefined => {
-    if (!value) return undefined;
-    const flat = value.replace(/\s+/gu, ' ').trim();
-    if (!flat) return undefined;
-    return flat.length > max ? flat.slice(0, max - 1) + '\u2026' : flat;
-  };
-  const base = info.target ? clip(info.target.split(/[/\\]/u).at(-1), 28) : undefined;
-  const said = clip(stringValue(info.args, 'description'), 40);
-  switch (info.category) {
-    case 'read': return '读取 ' + (base ?? '文件');
-    case 'write': return clip(info.title, 40) ?? '写入文件';
-    case 'terminal': {
-      const cmd = clip(info.command, 32);
-      return said ?? (cmd ? '运行 ' + cmd : '运行命令');
-    }
-    case 'search': {
-      const needle = clip(stringValue(info.args, 'pattern', 'query'), 26);
-      return info.name === 'glob' ? '查找 ' + (needle ?? '文件') : '搜索 ' + (needle ?? '内容');
-    }
-    case 'web': {
-      const query = clip(info.target, 30);
-      return (info.name === 'web_search' ? '搜索网页' : '读取网页') + (query ? ' ' + query : '');
-    }
-    default: {
-      // Schema-less tools (run_code and friends) describe themselves in an
-      // argument rather than a known field: prefer the model's own
-      // description, then the first meaningful line of the code it ran.
-      if (said) return said;
-      const code = stringValue(info.args, 'code', 'source', 'script');
-      if (code) {
-        const line = code.split('\n').map(part => part.trim())
-          .find(part => part && !/^[)\]}]/.test(part) && !/^(\/\/|\*|\/\*|#)/.test(part));
-        if (line) return clip(line.replace(/\s+/gu, ' '), 44) ?? '运行代码';
-      }
-      return clip(info.title ?? info.name, 32) ?? '工具调用';
-    }
-  }
-}
-
 /** Only a run that contains real thinking/tool work is worth folding. */
 function foldableRun(run: readonly LiveStep[]): boolean {
   return run.some(step => step.kind === 'reasoning' || step.kind === 'tool');
@@ -226,4 +183,47 @@ export function presentLiveTurn(steps: readonly LiveStep[], boundary: TurnBounda
     flush();
   }
   return items;
+}
+
+/**
+ * Summaries for collapsed process that sits between two narration blocks.
+ *
+ * A live-fold cell already shows that summary while the turn is open. Drawing
+ * the seam as well repeats the same counts, so a run whose every step is
+ * already inside a fold cell contributes neither a seam nor `after`. `after`
+ * is what marks the previous body with `data-reader-seam-after` and drops its
+ * bottom padding; skipping the seam must leave that spacing alone.
+ */
+export function planProcessSeams(
+  steps: readonly LiveStep[],
+  liveItems: readonly LiveTurnItem[],
+  expanded: boolean,
+): { before: Map<string, string>; after: Set<string> } {
+  const before = new Map<string, string>();
+  const after = new Set<string>();
+  if (expanded) return { before, after };
+  const liveFolded = new Set(
+    liveItems.flatMap(item => item.kind === 'fold' ? item.steps.map(step => step.key) : []),
+  );
+  let previousBody: Extract<LiveStep, { kind: 'body' }> | undefined;
+  let process: LiveStep[] = [];
+  for (const step of steps) {
+    if (step.kind === 'body') {
+      const folded = process.filter(item => item.kind !== 'user');
+      const coveredByLiveFold = folded.length > 0 && folded.every(item => liveFolded.has(item.key));
+      if (!coveredByLiveFold && previousBody
+        && folded.some(item => item.kind === 'reasoning' || item.kind === 'tool' || item.kind === 'other')) {
+        before.set(step.key, foldSummary(folded));
+        after.add(previousBody.key);
+      }
+      previousBody = step;
+      process = [];
+    } else if (step.kind === 'user') {
+      previousBody = undefined;
+      process = [];
+    } else {
+      process.push(step);
+    }
+  }
+  return { before, after };
 }

@@ -24,13 +24,13 @@ Assistant narration — the body segments a step emits between reasoning and too
 
 - Collapsing process hides reasoning cards, tool calls, context rows and other process records; it never hides, truncates or dims narration.
 - Expanding process inserts those records back between the narration segments exactly where they occurred. Narration does not move, duplicate or become an answer card.
-- Narration uses the normal body typography and keeps no left rule of its own. When collapsed process sat between two narration blocks, a compact process-chain summary (1px rail on the shared `--reader-rail` edge + `思考×N · 工具×K` label + chevron, 12px tertiary) occupies the gap; it counts only the rows folded between those blocks and expands them in place when clicked.
+- Narration uses the normal body typography and keeps no left rule of its own. When collapsed process sat between two narration blocks, a compact process-chain summary (1px rail on the shared `--reader-rail` edge + `思考×N · 工具×K` label + chevron, 12px tertiary) occupies the gap; it counts only the rows folded between those blocks and expands them in place when clicked. If a live-fold cell already contains every one of those rows, the seam is omitted. Omitting it does not mark the previous narration with `data-reader-seam-after`, so that body keeps its bottom spacing.
 - A step that carries body blocks no longer advertises process content on that basis; only literal reasoning does.
 - Fold summaries count thinking, tools and records; narration is not counted as `输出×N` and never appears inside a fold box.
 - During a live turn, a later reasoning step collapses every earlier reasoning/tool run in its own position, even across narration blocks; the latest thinking and everything after it stay open, and narration itself is never folded or moved.
 - Auto-fold off, failure, interruption, unknown terminals and selection protection keep their existing behavior.
 
-While a turn is still open, a later reasoning step may collapse earlier steps of the same chain into one disclosure (`思考×N`). Body or tool alone never triggers that live fold. A mid-turn user insert or steering message resets the chain. This is presentation-only and does not change the successful-turn final-answer fold.
+While a turn is still open, a later reasoning step may collapse each earlier reasoning/tool run into its own disclosure at that run's source position. Narration stays outside those disclosures. Body or tool alone never triggers that live fold. A mid-turn user insert or steering message resets the chain, so reasoning after the insert does not fold steps before it. This is presentation-only and does not change the successful-turn final-answer fold. The live-fold cell is the only summary of a run it covers; the between-narration seam is not a second copy of that cell.
 
 ## Long reasoning
 

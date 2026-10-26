@@ -24,7 +24,7 @@ import { TimelineRail } from './TimelineRail.js';
 import { landTurn, scrollerOf } from './conversation-scroll.js';
 import { mergeTimelineItems, type TimelineItem } from './timeline.js';
 import { FoldSummaryText } from './LiveFold.js';
-import { foldSummary, presentLiveTurn, segmentLiveTurn } from './live-turn.js';
+import { planProcessSeams, presentLiveTurn, segmentLiveTurn } from './live-turn.js';
 import type { LiveStep } from './live-turn.js';
 import { frostedGlassOf } from './fold-intensity.js';
 import { ChoreographedFlow, useFlowChat } from './ChoreographedFlow.js';
@@ -56,10 +56,6 @@ function inboxText(item: { content?: readonly unknown[] }): string {
   return (item.content ?? []).filter((block): block is { type: 'text'; text: string } => {
     return typeof block === 'object' && block !== null && (block as { type?: unknown }).type === 'text' && typeof (block as { text?: unknown }).text === 'string';
   }).map(block => block.text).join('');
-}
-
-function inboxAttachmentCount(item: { content?: readonly unknown[] }): number {
-  return (item.content ?? []).filter(block => typeof block === 'object' && block !== null && (block as { type?: unknown }).type !== 'text').length;
 }
 
 function cleanErrorMessage(raw: string | undefined): string {
@@ -194,11 +190,8 @@ const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, 
       </ReasoningCard>
     </ProcessFragment>;
     if (!hasVisibleBody(part.blocks)) return null;
-    // Narration is plain body text, not annotation chrome. It never enters a
-    // disclosure. When collapsed process sat between two narration blocks, the
-    // gap carries a compact folded-process summary in the same language as the
-    // turn's process chain (left rail + 思考×N · 工具×K + chevron); clicking it
-    // expands the real process rows in place.
+    // Narration stays body prose and never enters a disclosure. The seam in
+    // the gap summarises folded process between two body blocks.
     const isFinalAnswer = !isProcessStep;
     return <Fragment key={part.start}>
       {seamSummary && <div className={css.processSeamRow} data-reader-process-seam data-reader-process-seam-summary={seamSummary}>
@@ -223,7 +216,7 @@ const AssistantNode = memo(function AssistantNode({ useChat, nodeKey, boundary, 
   })}</>;
 });
 
-const MainNode = memo(function MainNode({ useChat, nodeKey, boundary, pinned, processOpen = false, ...render }: SeatProps) {
+const MainNode = memo(function MainNode({ useChat, nodeKey, boundary, pinned, processOpen: _processOpen = false, ...render }: SeatProps) {
   const node = useChat(snapshot => snapshot.nodes.get(nodeKey));
   const [disclosureReset] = useState(() => createSnapshotStore(0));
   if (!node || node.visibility === 'hidden') return null;
@@ -330,7 +323,7 @@ function subagentCount(snapshot: { nodes: { get(key: string): ChatConversationVi
   return 0;
 }
 
-function GroupStatus({ group, sessionId, useChat, pending, motion }: Pick<ReaderProps, 'sessionId' | 'useChat'> & { group: ReaderGroup; motion: boolean; pending: { kind?: string } | undefined }) {
+function GroupStatus({ group, sessionId: _sessionId, useChat, pending, motion }: Pick<ReaderProps, 'sessionId' | 'useChat'> & { group: ReaderGroup; motion: boolean; pending: { kind?: string } | undefined }) {
   const text = useChat(snapshot => {
     const turn = group.turn === null ? undefined : snapshot.timeline.turns.get(group.turn);
     if (turn?.status === 'closed') {
@@ -565,36 +558,12 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys,
       ? item.key === key || item.steps.some(step => step.key === key || ('nodeKey' in step && step.nodeKey === key))
       : item.key === key || ('nodeKey' in item.step && item.step.nodeKey === key)));
   const expanded = !autoFold || holdingSelection || processExpanded(expansionChoice, boundary);
-  // When collapsed process sits between two narration blocks, the paragraphs
-  // stay plain body text and a compact process-chain summary occupies the gap
-  // between them (left rail + 思考×N · 工具×K + chevron, the same language as
-  // the turn's folded-process row). Compute it from the same source-ordered
-  // steps the flow renders, so the summary counts exactly the rows that were
-  // folded between those two body blocks.
-  const seamPlan = useMemo(() => {
-    const before = new Map<string, string>();
-    const after = new Set<string>();
-    if (expanded) return { before, after };
-    let previousBody: Extract<LiveStep, { kind: 'body' }> | undefined;
-    let process: LiveStep[] = [];
-    for (const step of steps) {
-      if (step.kind === 'body') {
-        const folded = process.filter(item => item.kind !== 'user');
-        if (previousBody && folded.some(item => item.kind === 'reasoning' || item.kind === 'tool' || item.kind === 'other')) {
-          before.set(step.key, foldSummary(folded));
-          after.add(previousBody.key);
-        }
-        previousBody = step;
-        process = [];
-      } else if (step.kind === 'user') {
-        previousBody = undefined;
-        process = [];
-      } else {
-        process.push(step);
-      }
-    }
-    return { before, after };
-  }, [steps, expanded]);
+  // Seam between narration blocks. Skip a run a live-fold cell already
+  // covers, and do not drop the previous body's bottom spacing.
+  const seamPlan = useMemo(
+    () => planProcessSeams(steps, liveItems, expanded),
+    [steps, liveItems, expanded],
+  );
   const [foldOpenByKey, setFoldOpenByKey] = useState<Record<string, boolean>>({});
   useLayoutEffect(() => {
     // Restoring automatic folding also releases live "prior steps" disclosures.

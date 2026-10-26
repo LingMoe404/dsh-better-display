@@ -36,9 +36,9 @@ export function boundaryOf(turn: TurnLocation | undefined): TurnBoundary {
 /**
  * A settled body step before the closing step of a successful turn.
  *
- * This is presentation classification only: narration is never process content
- * and never folds. It only chooses the calmer commentary style for text that is
- * no longer the turn's final answer.
+ * This is presentation classification only. Narration is never process content
+ * and never folds. The flag only marks body text that is no longer the turn's
+ * final answer, so copy and fork stay on that final answer.
  */
 export function isEarlierNarration(data: AssistantChatData, boundary: TurnBoundary): boolean {
   // New body text, a tool call, or a settled step is not a completed turn.
