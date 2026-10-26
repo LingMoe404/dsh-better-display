@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type { AssistantBlock, ToolCallBlock, TurnLocation } from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type { AssistantChatData, ChatConversationViewNode } from '@deepseek-ai/dsh-client-ui-chat/client';
 import { assistantSegments, boundaryOf, forkAnchorSeq, groupNodes, hasProcessContent, hasVisibleBody, isEarlierNarration, processChoiceKey, processExpanded, terminalLabel, toolFailed } from '../src/client/projection.ts';
+import { visibleChatKeys } from '../src/client/rewind-cut.ts';
 import type { TurnBoundary } from '../src/client/projection.ts';
 import { activityPhase, activitySummary, inputFields, readerFlow } from '../src/client/tool-activity.ts';
 
@@ -174,6 +175,67 @@ test('a nonzero terminal exit is a failure even when the tool transport is non-e
   assert.equal(activityPhase({ block }), 'failed');
   assert.equal(activityPhase({ block: { ...block, meta: null } as ToolCallBlock }), 'returned');
   assert.equal(activityPhase({}, true), 'interrupted');
+});
+
+test('a supplementary rewind does not restore a tool draft from a cut step', () => {
+  const liveDraft = { kind: 'tool-call' as const, callId: 'live-tool', name: 'bash', argsRaw: '{"command":"pwd"}' };
+  const earlyCutDraft = { kind: 'tool-call' as const, callId: 'early-cut', name: 'bash', argsRaw: '{"command":"echo EARLY"}' };
+  const cutDraft = { kind: 'tool-call' as const, callId: 'cut-tool', name: 'bash', argsRaw: '{"command":"echo WITHDRAWN_TOOL"}' };
+  const orphanDraft = { kind: 'tool-call' as const, callId: 'orphan-cut', name: 'bash', argsRaw: '{"command":"echo ORPHAN"}' };
+  const turn = {
+    turn: 1,
+    steps: [
+      { step: 0, start: { seq: 2 }, data: new Map([['assistant-step', { blocks: [liveDraft, earlyCutDraft] }]]) },
+      { step: 1, start: { seq: 4 }, data: new Map([['assistant-step', { blocks: [cutDraft, orphanDraft] }]]) },
+    ],
+  } as unknown as TurnLocation;
+  const rows = [
+    { key: 'user', kind: 'user', anchorSeq: 1, visibility: 'visible', location: { kind: 'turn', turn }, data: {} },
+    { key: 'supplement', kind: 'steering', anchorSeq: 3, visibility: 'visible', location: { kind: 'turn', turn }, data: {} },
+    { key: 'early-tool', kind: 'tool-call', anchorSeq: 4, visibility: 'visible', location: { kind: 'turn', turn }, data: { root: { callId: 'early-cut', name: 'bash', argsRaw: '{}' } } },
+    { key: 'tool', kind: 'tool-call', anchorSeq: 5, visibility: 'visible', location: { kind: 'turn', turn }, data: { root: { callId: 'cut-tool', name: 'bash', argsRaw: '{}' } } },
+    { key: 'cmd', kind: 'command', anchorSeq: 6, visibility: 'visible', location: { kind: 'none' }, data: { name: 'rewind-plugin', args: '@3 chat', outcome: { kind: 'success', sourceEventSeq: 7 } } },
+  ] as unknown as ChatConversationViewNode[];
+  const byKey = new Map(rows.map(node => [node.key, node]));
+  const order = rows.map(node => node.key);
+  const visible = visibleChatKeys({ order, nodes: byKey });
+  assert.deepEqual([...visible], ['user']);
+  const group = groupNodes(visible, key => byKey.get(key))[0];
+  if (!group) throw new Error('missing turn group');
+  const mainKeys = byKey.get(group.keys[0] ?? '')?.kind === 'user' ? group.keys.slice(1) : group.keys;
+  const flow = readerFlow({ ...group, keys: mainKeys }, turn, key => byKey.get(key), order);
+  const toolKeys = flow.filter(entry => entry.kind === 'tool').map(entry => entry.key);
+  assert.deepEqual(toolKeys, ['reader-tool:live-tool']);
+
+  const hiddenDraft = { kind: 'tool-call' as const, callId: 'hidden-call', name: 'write', argsRaw: '{"file_path":"/work/view.html"}' };
+  const hiddenTurn = {
+    turn: 2,
+    steps: [{ step: 0, start: { seq: 1 }, data: new Map([['assistant-step', { blocks: [hiddenDraft] }]]) }],
+  } as unknown as TurnLocation;
+  const hiddenNode = {
+    key: 'hidden-tool', kind: 'tool-call', anchorSeq: 2, visibility: 'hidden',
+    location: { kind: 'turn', turn: hiddenTurn },
+    data: { root: { callId: 'hidden-call', name: 'write', argsRaw: '{}' } },
+  } as unknown as ChatConversationViewNode;
+  const hiddenOrder = ['hidden-tool'];
+  const hiddenFlow = readerFlow(
+    { key: 'turn:2', turn: 2, keys: [] },
+    hiddenTurn,
+    key => key === hiddenNode.key ? hiddenNode : undefined,
+    hiddenOrder,
+  );
+  assert.equal(hiddenFlow[0]?.kind === 'tool' && hiddenFlow[0].key, 'reader-tool:hidden-call');
+
+  const previewRows = [
+    { key: 'user', kind: 'user', anchorSeq: 1, visibility: 'visible', location: { kind: 'turn', turn }, data: {} },
+    { key: 'preview', kind: 'command', anchorSeq: 8, visibility: 'visible', location: { kind: 'none' }, data: { name: 'rewind-plugin', args: 'preview @3 both', outcome: { kind: 'success', sourceEventSeq: 9 } } },
+  ] as unknown as ChatConversationViewNode[];
+  const previewByKey = new Map(previewRows.map(node => [node.key, node]));
+  const previewOrder = previewRows.map(node => node.key);
+  const previewFlow = readerFlow({ ...group, keys: mainKeys }, turn, key => previewByKey.get(key) ?? byKey.get(key), previewOrder);
+  const previewTools = previewFlow.filter(entry => entry.kind === 'tool').map(entry => entry.key);
+  assert.ok(previewTools.includes('reader-tool:cut-tool'));
+  assert.ok(previewTools.includes('reader-tool:live-tool'));
 });
 
 test('fork anchor prefers the durable closing seq and never yields a missing anchor', () => {

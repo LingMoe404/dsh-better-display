@@ -11,7 +11,7 @@ import { ToolActivity, ToolMedia } from './ToolActivity.js';
 import { OfficialNode, OfficialTail } from './OfficialContent.js';
 import { OFFICIAL_SEATS } from './official-slots.js';
 import { preparingLabel, readerFlow } from './tool-activity.js';
-import { Disclosure, ProcessFragment, StatusText, useMotionAllowed, usePinnedSelection, useReadingScroll } from './motion.js';
+import { Disclosure, ProcessFragment, RetiringTurns, StatusText, useMotionAllowed, usePinnedSelection, useReadingScroll } from './motion.js';
 import { StreamMotionContext } from './streaming.js';
 import { boundaryOf, forkAnchorSeq, groupNodes, hasProcessContent, processChoiceKey, processExpanded, terminalLabel } from './projection.js';
 import { basename, createProducedFileMentions, dirname, getTurnDeliverables, showDeliverablesRow } from './deliverables.js';
@@ -34,6 +34,7 @@ import type { BlockRenderProps, ReaderProps } from './types.js';
 import css from './Reader.module.css';
 import { markdownLabels, truncatedJsonLabel } from './primitive-labels.js';
 import { chatSeatProps } from './chat-seat.js';
+import { visibleChatKeys, visibleChatSignature } from './rewind-cut.js';
 import { ensureStyles } from './styles.js';
 
 function isNode<K extends ChatNodeKind>(node: ChatConversationViewNode, kind: K): node is ChatNode<K> {
@@ -493,7 +494,7 @@ const TurnGroup = memo(function TurnGroup({ group, motion, autoFold, pinnedKeys,
   const firstKind = props.useChat(snapshot => snapshot.nodes.get(group.keys[0])?.kind);
   const startsWithUser = firstKind === 'user';
   const mainKeys = startsWithUser ? group.keys.slice(1) : group.keys;
-  const flow = useMemo(() => readerFlow({ ...group, keys: mainKeys }, turn, key => nodes.get(key)), [nodes, group, mainKeys, turn]);
+  const flow = useMemo(() => readerFlow({ ...group, keys: mainKeys }, turn, key => nodes.get(key), snapshot.order), [nodes, group, mainKeys, turn, snapshot.order]);
   const steps = useMemo(() => segmentLiveTurn(flow, key => nodes.get(key)), [flow, nodes]);
   const liveItems = useMemo(() => presentLiveTurn(steps, boundary, autoFold), [steps, boundary, autoFold]);
   const openMode = deliverableOpenModeOf(useSyncExternalStore(
@@ -636,6 +637,9 @@ export function Reader(props: ReaderProps) {
   const activatedAt = useRef(Date.now());
   const order = props.useChat(snapshot => snapshot.order);
   const nodes = props.useChat(snapshot => snapshot.nodes);
+  // A rewind upserts the command row in place, so order and nodes keep their identity.
+  const rewindSignature = props.useChat(snapshot => visibleChatSignature(snapshot));
+  const renderKeys = useMemo(() => visibleChatKeys({ order, nodes }), [order, nodes, rewindSignature]);
   const timeline = props.useChat(snapshot => snapshot.timeline);
   const running = props.useSession(snapshot => snapshot.running);
   const pending = props.useSessionStatus(snapshot => snapshot.get(props.sessionId)?.pendingInteraction);
@@ -664,7 +668,7 @@ export function Reader(props: ReaderProps) {
     rows.push(...local.values());
     return rows;
   }, [inboxSteering, pendingList, visibleSubmissions]);
-  const waitAnchor = waitingAnchor(order, key => nodes.get(key), pendingList);
+  const waitAnchor = waitingAnchor(renderKeys, key => nodes.get(key), pendingList);
   const motionPreference = props.useStore(state => state.motion);
   const motion = useMotionAllowed(motionPreference);
   const prefsSnap = useSyncExternalStore(
@@ -684,14 +688,14 @@ export function Reader(props: ReaderProps) {
   }, [autoFold, props.actions]);
   const frostedGlass = frostedGlassOf(prefsSnap);
   const streamMotion = useMemo(() => ({ enabled: motion, activatedAt: activatedAt.current }), [motion]);
-  const groups = useMemo(() => groupNodes(order, key => nodes.get(key)), [order, nodes, timeline]);
+  const groups = useMemo(() => groupNodes(renderKeys, key => nodes.get(key)), [renderKeys, nodes, timeline]);
   const isAwaitingModel = useMemo(() => {
     // 状态机铁律：「深度求索中」与「正在处理/思考」永远互斥。
     // 1. 仅空闲发送（!running）的本地回显窗口：用户按下回车第 0 毫秒立即反馈。
     //    忙碌时的 queued/steering 回显不算等待——模型本来就在工作。
     if (!running && pendingList.length > 0) return true;
 
-    const lastKey = order.at(-1);
+    const lastKey = renderKeys.at(-1);
     const lastNode = lastKey ? nodes.get(lastKey) : undefined;
     if (!lastKey || !lastNode) return false;
 
@@ -716,7 +720,7 @@ export function Reader(props: ReaderProps) {
     const lastGroup = groups.at(-1);
     const turn = lastGroup?.turn === null || lastGroup?.turn === undefined ? undefined : timeline.turns.get(lastGroup.turn);
     return turn?.status !== 'closed';
-  }, [running, pendingList, order, nodes, groups, timeline]);
+  }, [running, pendingList, renderKeys, nodes, groups, timeline]);
   const scroll = useReadingScroll(root, motion);
   const pinnedKeys = usePinnedSelection(root);
   const selectedProcessKeys = usePinnedSelection(root, '[data-reader-process]');
@@ -824,7 +828,7 @@ export function Reader(props: ReaderProps) {
     }
   }, [props.loadThrough, props.loadOlder, scroll.jump, scroll.release, timelineItems]);
 
-  const lastKey = order.at(-1);
+  const lastKey = renderKeys.at(-1);
   const lastNode = lastKey ? nodes.get(lastKey) : undefined;
   const lastSubmissionId = pendingList.length ? pendingList[pendingList.length - 1].requestId : null;
   const lastOrderKeyRef = useRef<string | undefined>(lastKey);
@@ -845,7 +849,7 @@ export function Reader(props: ReaderProps) {
   // scrollport without that hook as inspect-only and hide [data-composer-seat].
   return <StreamMotionContext.Provider value={streamMotion}><ReaderLaneScope><div ref={root} className={css.root} data-reader-build="0.3.4" data-dsh-better-display="0.3.4" data-reader-wait-clock-version="input-v1" data-reader-wait-start={waitAnchor.time ?? undefined} data-motion={motion ? 'on' : 'off'} data-reader-glass={frostedGlass || undefined} data-reader-auto-fold={autoFold ? 'on' : 'off'}>
     <TimelineRail items={timelineItems} activeTurn={activeTurn} busyTurn={busyTurn} onNavigate={onNavigateTurn} />
-    <div className={css.column} data-chat-flow="">
+    <div className={css.column} data-chat-flow="" tabIndex={-1}>
       <StickyLane kind="toolbar" className={css.toolbar}>
         <button
           type="button"
@@ -867,7 +871,7 @@ export function Reader(props: ReaderProps) {
       {historyError && <div className={css.notice}>历史记录加载失败，可再次尝试；现有内容未改变。</div>}
       {openError && <div className={css.error} role="alert">会话暂时无法读取：{openError.message}</div>}
       {loading && groups.length === 0 && <p className={css.empty} role="status">正在读取会话…</p>}
-      {groups.map(group => <TurnGroup key={group.key} {...props} group={group} motion={motion} autoFold={autoFold} pinnedKeys={pinnedKeys} selectedProcessKeys={selectedProcessKeys} isAwaitingModel={isAwaitingModel && group.key === groups.at(-1)?.key} />)}
+      <RetiringTurns groups={groups} render={group => <TurnGroup {...props} group={group} motion={motion} autoFold={autoFold} pinnedKeys={pinnedKeys} selectedProcessKeys={selectedProcessKeys} isAwaitingModel={isAwaitingModel && group.key === groups.at(-1)?.key} />} />
       {pendingInputs.map((item, index) => {
          const submission = 'requestId' in item ? item : undefined;
          const text = submission?.text ?? inboxText(item as PendingInboxItem);
